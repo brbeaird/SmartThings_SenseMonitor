@@ -19,14 +19,20 @@ definition(
     author: "Brian Beaird",
     description: "Connects SmartThings with Sense",
     category: "My Apps",
-    iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
-    iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
-    iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png")
+    iconUrl: "https://raw.githubusercontent.com/brbeaird/SmartThings_SenseMonitor/master/icons/sense.1x.png",
+    iconX2Url: "https://raw.githubusercontent.com/brbeaird/SmartThings_SenseMonitor/master/icons/sense.2x.png",
+    iconX3Url: "https://raw.githubusercontent.com/brbeaird/SmartThings_SenseMonitor/master/icons/sense.3x.png")
 
 
 preferences {
-	section("Title") {
-    	input "quietModes", "mode", title: "Do not send push notifications during these modes", multiple: true		
+	page(name: "prefConfigure", title: "SEnse")
+}
+
+def prefConfigure(){
+	return dynamicPage(name: "prefConfigure", title: "Configure Sense Devices", uninstall:true, install: true) {
+		section("Filter Notifications") {
+        input "quietModes", "mode", title: "Do not send push notifications during these modes", multiple: true
+        }
 	}
 }
 
@@ -38,7 +44,6 @@ def installed() {
 
 def updated() {
 	log.debug "Updated with settings: ${settings}"
-
 	unsubscribe()
 	initialize()
 }
