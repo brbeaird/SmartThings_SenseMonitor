@@ -1,10 +1,37 @@
 # SmartThings_SenseMonitor
 Connects SmartThings with Sense
 
+### Beta Notice and known limitations
+* This SmartApp is considered an early "beta" - functionality is limited and there are likely to be bugs. Feel free to <a href="https://github.com/brbeaird/SmartThings_SenseMonitor/issues">create and track issues here</a>.
+
+* The app does not currently handle when Sense devices are deleted - you'll need to manually delete the counterpart in SmartThings
+* The app does not offer the ability to exclude certain Sense devices from SmartThings; for now, they will all come over.
+
 ### Overview
 * This SmartApp is currently only supported in the **SmartThings Classic mobile app**; the new app does not yet support custom apps like this.
-* This SmartApp is considered an early "beta" - functionality is limited and there are likely to be bugs. Feel free to <a href="https://github.com/brbeaird/SmartThings_SenseMonitor/issues">create and track issues here</a>.
 * The app requires a node server running on a machine (PC, Raspberry PI, etc.) on the same LAN as your SmartThings hub (don't worry - setup is quite simple). The node server creates a realtime websocket connection with Sense. On relevant events, the node server sends data over your LAN to the hub. The SmartApp listens for this data and then updates devices in SmartThings as needed.
+
+### Device Tile
+![Device Tile](https://i.imgur.com/4G3Eo8n.png "Device Tile")
+
+
+### Device Tile Options
+![Device Tile Options](https://i.imgur.com/67yuCcd.png "Device Tile Options")
+
+
+### SmartApp Options
+![SmartApp Options](https://i.imgur.com/IVLCOQ0.png "SmartApp Options")
+
+### With ActionTiles
+![With ActionTiles](https://i.imgur.com/I1sY3IL.png "With ActionTiles")
+
+### Device Creation and Sync
+* This app automatically creates devices in SmartThings based on Sense devices. It also handles when those devices are renamed.
+* Device status (on/off) and power usage is kept in sync within SmartThings. You can use these values to drive various other routines or ActionTiles panels.
+
+### Push Notifications
+* This app offers the option to send push notifications when devices turn on or off. Access push notification settings at each individual device in the SmartThings mobile app.
+* You can set "quiet modes" during which notifications will not be sent. Go to the Sense SmartApp in the SmartThings mobile app to configure this.
 
 
 
