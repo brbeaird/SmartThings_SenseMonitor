@@ -1,5 +1,9 @@
 /**
- *  SenseMonitor
+ *	Sense Monitor SmartApp
+ *
+ *	Author: Brian Beaird
+ *  Last Updated: 2018-08-04
+ *
  *
  *  Copyright 2018 Brian Beaird
  *
@@ -25,7 +29,10 @@ definition(
 
 
 preferences {
-	page(name: "prefConfigure", title: "SEnse")
+	page(name: "prefConfigure", title: "Sense")
+    //TODO: Add version Checking
+    //TODO: Add preference to exclude Sense devices    
+    //TODO: Add preference to NOT auto re-sync names
 }
 
 def prefConfigure(){
@@ -59,12 +66,7 @@ def lanEventHandler(evt) {
     def msg = parseLanMessage(evt.description)
 	//def parsedEvent = parseLanMessage(description)
     def body = msg.body
-    def headerMap = msg.headers      // => headers as a Map
-    //log.debug evt.description
-    //if (parsedEvent != null){
-        //log.debug parsedEvent.data
-        //log.debug parsedEvent.data.devices
-       //}
+    def headerMap = msg.headers      // => headers as a Map    
     
     //Filter out calls from other LAN devices
     if (headerMap != null){
@@ -72,11 +74,7 @@ def lanEventHandler(evt) {
         	//log.debug "Non-sense data detected - ignoring."
         	return 0
         }
-        
-        //log.debug "no headers found"
-    	//return 0
     }
-    
     
     def result
     if (body != null){    
@@ -92,11 +90,11 @@ def lanEventHandler(evt) {
         }
     
     	/*
-        Put dni and name of each into state's "availableDevices" map
-        If dni is in "prefIgnoreDev" list, do not create child
-        
-        */
-        
+        TODO: 
+        Populate "availableDevices" map
+        If DNI is in "exclude" preference, do not create child
+        If "do not rename" preference, do not rename child
+        */        
         
         if (result.devices){
         	result.devices.each { senseDevice ->
@@ -108,7 +106,7 @@ def lanEventHandler(evt) {
                 def childDevice = getChildDevice(dni)
                 def childDeviceAttrib = [:]
                 def fullName = "Sense-" + senseDevice.name
-                if (!childDevice){                    
+                if (!childDevice){
                     log.debug "name will be: " + fullName
                     //childDeviceAttrib = ["name": senseDevice.name, "completedSetup": true]
                     childDeviceAttrib = ["name": fullName, "completedSetup": true]
@@ -120,20 +118,24 @@ def lanEventHandler(evt) {
                     }
                     catch(physicalgraph.app.exception.UnknownDeviceTypeException e)
                     {
-                        log.debug "Error! " + e
+                        log.debug "Error! " + e                        
                         //state.installMsg = state.installMsg + deviceName + ": problem creating RM device. Check your IDE to make sure the brbeaird : RainMachine device handler is installed and published. \r\n\r\n"
                     }
                 }
                 else{
-                    //log.debug "Updating " + fullName
-                    childDevice.updateDeviceStatus(senseDevice)
+                    //Check and see if name needs a refresh
                     if (childDevice.name != fullName || childDevice.label != fullName){
-                    	log.debug ("Updating device name (old label was " + childDevice.label + " old name was " + childDevice.name + " new hotness: " + fullName)
-                        childDevice.name = fullName
-                        childDevice.label = fullName
-                        //state.installMsg = state.installMsg + deviceName + ": updating device name (old name was " + childDevice.label + ") \r\n\r\n"
-                	}                
-                }            
+                            log.debug ("Updating device name (old label was " + childDevice.label + " old name was " + childDevice.name + " new hotness: " + fullName)
+                            childDevice.name = fullName
+                            childDevice.label = fullName
+                            //state.installMsg = state.installMsg + deviceName + ": updating device name (old name was " + childDevice.label + ") \r\n\r\n"
+                    }
+                    //Update if something has recently changed
+                    if (senseDevice.recentlyChanged){
+                        log.debug "Updating " + fullName
+                        childDevice.updateDeviceStatus(senseDevice)                        
+					}
+                }
             }            
         }    	
     }	
