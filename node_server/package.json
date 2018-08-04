@@ -12,6 +12,6 @@
   "dependencies": {
     "request": "^2.87.0",
     "request-promise": "^4.2.2",
-    "unofficial-sense": "^1.1.2"
+    "unofficial-sense": "^1.1.4"
   }
 }
