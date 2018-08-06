@@ -1,8 +1,9 @@
 
 //Required settings
-var email = "ReplaceWithYourSenseEmail";
-var password = "ReplaceWithYourSensePassword";
-var smartThingsHubIP = "ReplaceWithYourHubIP"
+var config = require('./config')
+var email = config.email;
+var password = config.password;
+var smartThingsHubIP = config.smartThingsHubIP;
 
 //Optional Settings
 /*This process opens up a websocket connection to Sense; we see realtime data from Sense every couple seconds.
@@ -13,9 +14,8 @@ We send an update when at least one device has turned on or off.
 We send an update when power usage on a device has changed by at least 100 watts (usageThreshold).
 */
 var usageThreshold = 200;    //Change in usage that determines when a special push to ST is made
-var totalUsageThreshold = 100;    //Change in usage that determines when the "total" device is marked as recently changed
-var maximumsecondsBetweenPush = 180; //Maximum number of seconds between data pushes to ST
-var minimumSecondsBetweenPush = 30; //Minimum number of seconds between data pushes to ST
+var maximumsecondsBetweenPush = 60; //Maximum number of seconds between data pushes to ST
+var minimumSecondsBetweenPush = 10; //Minimum number of seconds between data pushes to ST
 var autoReconnect = true;
 
 //Libraries
@@ -37,7 +37,8 @@ function getData(){
         email: email,
         password: password,
         verbose: false
-    }).then((mySense) => {
+    })
+    .then((mySense) => {
         console.log("Successfully connected to Sense! Data incoming!")
         reconnectPending = false;
         mySense.getDevices().then(devices => {
@@ -86,7 +87,8 @@ function getData(){
                 if (data.payload != undefined){
                     if (data.payload.devices != undefined){                        
                         let updateNow = false;
-                        let usageUpdate = false;
+                        //let usageUpdate = false;
+                        //let statusChange = false;
 
                         //Mark off saved list so we can detect which have been seen lately
                         Object.keys(deviceList).forEach(function (key){                            
@@ -102,16 +104,15 @@ function getData(){
                             let currentUsage = dev.w;
                             let usageDelta = currentUsage - prevUsage;
                             
-                            if (prevState != "on" && prevState != "unknown"){
+                            if (prevState != "on" && prevState != "unknown" && dev.name != "Other"){
                                 console.log(new Date().toLocaleString() + " " + dev.name + " turned on!");
                                 updateNow = true;
                                 deviceList[dev.id].recentlyChanged = true;
                             }
 
-                            if (prevUsage != -1 && Math.abs(usageDelta) > usageThreshold){
+                            if (prevUsage != -1 && Math.abs(usageDelta) > usageThreshold && dev.name != "Other"){
                                 console.log(new Date().toLocaleString() + " " + dev.name + " usage changed by " + usageDelta);
-                                usageUpdate = true;
-                                deviceList[dev.id].recentlyChanged = true;
+                                updateNow = true;
                             }
                             deviceList[dev.id].state = "on";
                             deviceList[dev.id].usage = dev.w;
@@ -137,6 +138,7 @@ function getData(){
                                 if (deviceList[key].state != "off" && deviceList[key].state != "unknown" && deviceList[key].name != "Other"){
                                     console.log(new Date().toLocaleString() + " " + deviceList[key].name + " turned off!");
                                     updateNow = true;
+                                    statusChange = true;
                                     deviceList[key].recentlyChanged = true;
                                 }
                                 deviceList[key].state = "off";
@@ -144,25 +146,17 @@ function getData(){
                             }
                         })
 
-                        //Push total usage update if it's changed recently
-                        if (usageUpdate || (Math.abs(senseTotal.usage - prevTotalUsage) > totalUsageThreshold)){
-                            senseTotal.recentlyChanged = true
-                        }
-
                         //Add in "total" device
-                        devArray.push(senseTotal);
-                        prevTotalUsage = senseTotal.usage;  //Save current total for future comparison
+                        devArray.push(senseTotal);                        
 
-                        var secondsSinceLastPush = (Date.now() - lastPush.getTime()) / 1000
-                        
-                        //If usage has changed and it's been awhile to avoid spamming, go ahead and send another update
-                        if (!updateNow && usageUpdate && secondsSinceLastPush >= minimumSecondsBetweenPush){updateNow = true;}
+                        var secondsSinceLastPush = (Date.now() - lastPush.getTime()) / 1000                        
 
                         //Override updateNow if it's been less than 15 seconds since our last push
-                        //if (secondsSinceLastPush <= minimumSecondsBetweenPush){updateNow = false;}
+                        if (secondsSinceLastPush <= minimumSecondsBetweenPush){updateNow = false;}                        
 
                         if (updateNow || secondsSinceLastPush >= maximumsecondsBetweenPush){
                             //console.log("Sending data to SmartThings hub");
+                            prevTotalUsage = senseTotal.usage;  //Save current total for future comparison
                             lastPush = new Date();
                             var options = {
                                 method: 'POST',
@@ -180,13 +174,15 @@ function getData(){
                                         console.log(new Date().toLocaleString() + " **Data successfully sent to SmartThings hub!**");
                                 })
                                 .catch(function (err) {
-                                    console.log("Error sending data to ST: " & err);           
+                                    console.log("ERROR: Unable to connect to SmartThings Hub: " + err.message);                                    
                                 });
                         }
                     }
                 }
             }
         }
-    })
+    }, function(err) {
+        console.log("Sense error: " + err.message);
+        return;
+    })    
 }
-
