@@ -19,7 +19,7 @@ var minimumSecondsBetweenPush = 10; //Minimum number of seconds between data pus
 var autoReconnect = true;
 
 //Libraries
-const sense = require('./unofficial-sense');
+const sense = require('./unofficial-sense');    //Temporarily using our own version until pull requests are merged in
 var rp = require("request-promise");
 
 //Global variables to keep track of various things

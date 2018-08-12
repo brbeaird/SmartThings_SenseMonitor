@@ -1,3 +1,9 @@
+/*
+Note: this is a modified version pulled from @blandman's NPM version. A few changes have been made and pull requests are pending.
+    Once those are merged in, we'll roll back to just using the package.
+*/
+
+
 const fetch = require('node-fetch'), ws = require('ws'), EventEmitter = require('events');
 
 
