@@ -10,6 +10,7 @@ Connects SmartThings with Sense
 ### Overview
 * This SmartApp is currently only supported in the **SmartThings Classic mobile app**; the new app does not yet support custom apps like this.
 * The app requires a node server running on a machine (PC, Raspberry PI, etc.) on the same LAN as your SmartThings hub (don't worry - setup is quite simple). The node server creates a realtime websocket connection with Sense. On relevant events, the node server sends data over your LAN to the hub. The SmartApp listens for this data and then updates devices in SmartThings as needed.
+* Special thanks to <a href="https://github.com/blandman">blandman</a> for his work on the unofficial sense API node library
 
 ### Device Tile
 ![Device Tile](https://i.imgur.com/4G3Eo8n.png "Device Tile")
