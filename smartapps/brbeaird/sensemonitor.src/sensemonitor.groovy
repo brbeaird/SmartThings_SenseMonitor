@@ -2,7 +2,7 @@
  *	Sense Monitor SmartApp
  *
  *	Author: Brian Beaird
- *  Last Updated: 2018-08-04
+ *  Last Updated: 2018-08-11
  *
  *
  *  Copyright 2018 Brian Beaird
@@ -17,6 +17,9 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  */
+ 
+ include 'asynchttp_v1'
+ 
 definition(
     name: "SenseMonitor",
     namespace: "brbeaird",
@@ -36,6 +39,14 @@ preferences {
 }
 
 def prefConfigure(){
+	state.previousVersion = state.thisSmartAppVersion
+    if (state.previousVersion == null){
+    	state.previousVersion = 0;
+    }
+    state.thisSmartAppVersion = "0.1.0"
+    getVersionInfo(0, 0)
+
+
 	return dynamicPage(name: "prefConfigure", title: "Configure Sense Devices", uninstall:true, install: true) {
 		section("Filter Notifications") {
         input "quietModes", "mode", title: "Do not send push notifications during these modes", multiple: true
@@ -45,15 +56,21 @@ def prefConfigure(){
 
 def installed() {
 	log.debug "Installed with settings: ${settings}"
-
 	initialize()
 }
 
 def updated() {
-	log.debug "Updated with settings: ${settings}"
+	if (state.previousVersion != state.thisSmartAppVersion){    	
+    	getVersionInfo(state.previousVersion, state.thisSmartAppVersion);
+    }
 	unsubscribe()
 	initialize()
 }
+
+def uninstalled() {
+    getVersionInfo(state.previousVersion, 0);
+}
+
 
 def initialize() {
 	// listen to LAN incoming messages
@@ -97,6 +114,7 @@ def lanEventHandler(evt) {
         */        
         
         if (result.devices){
+        	//log.debug result.versionInfo.SmartApp
         	result.devices.each { senseDevice ->
             
                 //log.debug result.devices[0]  //Yay
@@ -131,12 +149,61 @@ def lanEventHandler(evt) {
                             //state.installMsg = state.installMsg + deviceName + ": updating device name (old name was " + childDevice.label + ") \r\n\r\n"
                     }
                     //Update if something has recently changed
-                    if (senseDevice.recentlyChanged){
-                        log.debug "Updating " + fullName
-                        childDevice.updateDeviceStatus(senseDevice)                        
-					}
+                    //if (senseDevice.recentlyChanged){
+                        //log.debug "Updating " + fullName
+                    childDevice.updateDeviceStatus(senseDevice)                        
+					//}
                 }
             }            
         }    	
-    }	
+    }
+}
+
+def getVersionInfo(oldVersion, newVersion){	
+    def params = [
+        uri:  'http://www.fantasyaftermath.com/getVersion/sense/' +  oldVersion + '/' + newVersion,
+        contentType: 'application/json'
+    ]
+    asynchttp_v1.get('responseHandlerMethod', params)
+}
+
+def responseHandlerMethod(response, data) {
+    if (response.hasError()) {
+        log.error "response has error: $response.errorMessage"
+    } else {
+        def results = response.json
+        state.latestSmartAppVersion = results.SmartApp;
+        state.latestDeviceVersion = results.DoorDevice;        
+    }
+    
+    log.debug "previousVersion: " + state.previousVersion
+    log.debug "installedVersion: " + state.thisSmartAppVersion
+    log.debug "latestVersion: " + state.latestSmartAppVersion
+    log.debug "deviceVersion: " + state.latestDeviceVersion    
+}
+
+
+def versionCheck(){
+	state.versionWarning = ""    
+    state.thisDeviceVersion = ""
+    
+    def childExists = false
+    def childDevs = getChildDevices() 
+    
+    if (childDevs.size() > 0){
+    	childExists = true
+        state.thisDeviceVersion = childDevs[0].showVersion()
+        log.debug "child version found: " + state.thisDeviceVersion
+    }
+    
+    log.debug "RM Device Handler Version: " + state.thisDeviceVersion    
+    
+    if (state.thisSmartAppVersion != state.latestSmartAppVersion) {
+    	state.versionWarning = state.versionWarning + "Your SmartApp version (" + state.thisSmartAppVersion + ") is not the latest version (" + state.latestSmartAppVersion + ")\n\n"
+	}
+	if (childExists && state.thisDeviceVersion != state.latestDeviceVersion) {
+    	state.versionWarning = state.versionWarning + "Your RainMachine device version (" + state.thisDeviceVersion + ") is not the latest version (" + state.latestDeviceVersion + ")\n\n"
+    }
+	
+    log.debug state.versionWarning
 }

@@ -2,7 +2,7 @@
  *	Sense Device
  *
  *	Author: Brian Beaird
- *  Last Updated: 2018-08-04
+ *  Last Updated: 2018-08-11
  *
  ***************************
  *
@@ -83,7 +83,7 @@ def off(){
 */
 
 def checkForOnNotify(){handlePendingNotification(state.lastTurnedOn, state.lastTurnedOff, "On", prefNotifyOnDelay)}
-def checkForOffNotify(){handlePendingNotification(state.lastTurnedOff, state.lastTurnedOn, "Off", prefNotifyOnDelay)}
+def checkForOffNotify(){handlePendingNotification(state.lastTurnedOff, state.lastTurnedOn, "Off", prefNotifyOffDelay)}
 
 
 def handlePendingNotification(lastActivated, lastCanceled, actionName, delayPref){
@@ -101,10 +101,10 @@ def handlePendingNotification(lastActivated, lastCanceled, actionName, delayPref
     if (timeSinceLastChange >= delayInSeconds)
     {
     	log.debug "Sending " + actionName + " notification"
-        parent.sendPushMessage(getShortDevName() + " turned " + actionName + "(" + (Math.round(SinceLastChange / 60)) +  " minutes ago.)")
+        parent.sendPushMessage(getShortDevName() + " turned " + actionName + " (" + (Math.round(timeSinceLastChange / 60)) +  " minutes ago.)")
         
-        if (actionName == "On"){state.OnNotificationIsPending = false}
-        if (actionName == "Off"){state.OffNotificationIsPending = false}
+        //if (actionName == "On"){state.OnNotificationIsPending = false}
+        //if (actionName == "Off"){state.OffNotificationIsPending = false}
     }
     
     //If it's not time yet, reschedule a check
@@ -138,63 +138,76 @@ def getShortDevName(){
 
 def updateDeviceStatus(senseDevice){
 	def devName = getShortDevName()
-    def oldStatus = device.currentValue("switch")
-    log.debug "Old status was " + oldStatus
-    log.debug "New status is: " + senseDevice.state
-    if (senseDevice.state == "off"){
-    	if (oldStatus != "off"){
-            log.debug "Updating status to off"
-            sendEvent(name: "switch", value: "off", display: true, displayed: true, isStateChange: true, descriptionText: device.displayName + " was off")
-            if (prefNotifyOff && !(parent.quietModes.contains(location.currentMode))){                                
-                //If OFF notification is not already pending, schedule/send immediately depending on prefs
-                if (!state.OffNotificationIsPending){
-                    if (prefNotifyOffDelay == null || prefNotifyOffDelay == 0){
-                        parent.sendPushMessage(devName + " turned off!")
-                    }
-                    else{
-                        log.debug "Scheduling OFF push notification!"
-                        unschedule(checkForOnNotify)
-    					unschedule(checkForOffNotify)
-                        runIn(60*prefNotifyOffDelay, checkForOffNotify)
-                        state.OffNotificationIsPending = true
-                        state.lastTurnedOff = now()
-                    }
-                }
-                else{
-                    log.debug ("OFF notification is already pending")
-                }
-            }
+    def oldStatus = device.currentValue("switch")    
+    
+    //log.debug "Old status was " + oldStatus
+    //log.debug "New status is: " + senseDevice.state
+    
+    def statusChange = false
+    
+    if (oldStatus != senseDevice.state){statusChange = true}
+    
+    //If on/off status has changed
+    if (statusChange){
+    	 if (senseDevice.state == "off"){
+             log.debug "Updating status to off"
+             sendEvent(name: "switch", value: "off", display: true, displayed: true, isStateChange: true, descriptionText: device.displayName + " was off")
+             if (prefNotifyOff && !(parent.quietModes.contains(location.currentMode))){
+                 //Depending on prefs, send notification immediately or schedule after delay
+                 if (prefNotifyOffDelay == null || prefNotifyOffDelay == 0){
+                     parent.sendPushMessage(devName + " turned off!")
+                 }
+                 else{
+                     log.debug "Scheduling OFF push notification!"
+                     unschedule(checkForOnNotify)
+                     unschedule(checkForOffNotify)
+                     runIn(60*prefNotifyOffDelay, checkForOffNotify)
+                     //state.OffNotificationIsPending = true
+                     state.lastTurnedOff = now()
+                 }
+             }
         }
-    }
-    if (senseDevice.state == "on"){
-    	if (oldStatus != "on"){
+        if (senseDevice.state == "on"){
             log.debug "Updating status to on"
             sendEvent(name: "switch", value: "on", display: true, displayed: true, isStateChange: true, descriptionText: device.displayName + " was on")
             if (prefNotifyOn && !(parent.quietModes.contains(location.currentMode))){                                
-            	//If ON notification is not already pending, schedule/send immediately depending on prefs
-                if (!state.OnNotificationIsPending){
-                    if (prefNotifyOnDelay == null || prefNotifyOnDelay == 0){
-                        parent.sendPushMessage(devName + " turned on!")
-                    }
-                    else{
-                        log.debug "Scheduling ON push notification!"
-                        unschedule(checkForOnNotify)
-    					unschedule(checkForOffNotify)
-                        runIn(60*prefNotifyOnDelay, checkForOnNotify)
-                        state.OnNotificationIsPending = true
-                        state.lastTurnedOn = now()
-                    }
+                //Depending on prefs, send notification immediately or schedule after delay
+                if (prefNotifyOnDelay == null || prefNotifyOnDelay == 0){
+                    parent.sendPushMessage(devName + " turned on!")
                 }
                 else{
-                    log.debug ("ON notification is already pending")
+                    log.debug "Scheduling ON push notification!"
+                    unschedule(checkForOnNotify)
+                    unschedule(checkForOffNotify)
+                    runIn(60*prefNotifyOnDelay, checkForOnNotify)
+                    //state.OnNotificationIsPending = true
+                    state.lastTurnedOn = now()
                 }
             }
         }
     }
+   
+   	def currentPower = senseDevice.usage
+    def oldPower = device.currentValue("power")
+    //def usageChangeThreshold = 100
+    //if (devName == "Always On"){usageChangeThreshold = 1}    
+    //if (oldPower == null){oldPower = 0}
+    //if (oldPower == null){oldPower = 0}
     
-    if (device.currentValue("power") != senseDevice.usage){
-        log.debug "Updating usage to " + senseDevice.usage
-        sendEvent(name: "power", value: senseDevice.usage, display: true, displayed: true, isStateChange: true)        
+    //Also update usage if status has changed or if usage value has changed by more than 100 watts
+    //if (statusChange || oldPower == 0 || (currentPower - oldPower).abs() >= usageChangeThreshold){    
+    
+    //Decide if we should update the usage
+    if (oldPower != currentPower){
+        def isUsageChange = true
+        def usageChange = (currentPower - oldPower).abs()
+    	if (devName == "Other" && usageChange < 30 && currentPower != 0){isUsageChange = false}
+        if (devName == "TotalUsage" && usageChange < 50 && currentPower != 0){isUsageChange = false}
+        
+        if (isUsageChange){        
+            log.debug "Updating usage from " + oldPower + " to " + currentPower
+            sendEvent(name: "power", value: currentPower, display: true, displayed: true, isStateChange: true)
+        }
     }
     
     updateDeviceLastRefresh()
