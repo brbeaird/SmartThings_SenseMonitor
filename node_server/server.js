@@ -82,13 +82,12 @@ function getData(){
             }
         }
 
+        //Process the data from Sense!
         function processData(data){
             if (data.type == "realtime_update"){            
                 if (data.payload != undefined){
                     if (data.payload.devices != undefined){                        
-                        let updateNow = false;
-                        //let usageUpdate = false;
-                        //let statusChange = false;
+                        let updateNow = false;                        
 
                         //Mark off saved list so we can detect which have been seen lately
                         Object.keys(deviceList).forEach(function (key){                            
@@ -103,6 +102,9 @@ function getData(){
                             let prevUsage = deviceList[dev.id].usage;
                             let currentUsage = dev.w;
                             let usageDelta = currentUsage - prevUsage;
+                            
+                            //Don't go below 1 watt
+                            if (deviceList[dev.id].usage < 1){deviceList[dev.id].usage = 1}
                             
                             if (prevState != "on" && prevState != "unknown" && dev.name != "Other"){
                                 console.log(new Date().toLocaleString() + " " + dev.name + " turned on!");
@@ -131,8 +133,7 @@ function getData(){
                         var devArray = [];
 
                         //Loop over saved list again and mark any remaining devices as off
-                        Object.keys(deviceList).forEach(function (key){
-                            devArray.push(deviceList[key]);
+                        Object.keys(deviceList).forEach(function (key){                            
                             senseTotal.usage = senseTotal.usage + deviceList[key].usage;
                             if (deviceList[key].currentlyOn == false){
                                 if (deviceList[key].state != "off" && deviceList[key].state != "unknown" && deviceList[key].name != "Other"){
@@ -144,6 +145,7 @@ function getData(){
                                 deviceList[key].state = "off";
                                 deviceList[key].usage = 0;
                             }
+                            devArray.push(deviceList[key]);
                         })
 
                         //Add in "total" device
