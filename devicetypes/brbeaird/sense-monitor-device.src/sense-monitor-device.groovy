@@ -189,6 +189,7 @@ def updateDeviceStatus(senseDevice){
    
    	def currentPower = senseDevice.usage
     def oldPower = device.currentValue("power")
+    if (oldPower == null){oldPower = -1}
     //def usageChangeThreshold = 100
     //if (devName == "Always On"){usageChangeThreshold = 1}    
     //if (oldPower == null){oldPower = 0}
