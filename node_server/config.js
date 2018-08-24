@@ -1,6 +1,11 @@
-var config = {
-    email: 'YourSenseEmail',
-    password: 'YourSensePassword',
-    smartThingsHubIP: 'YourSmartThingsHubLANIP'    
+'use strict';
+module.exports = {
+    email: '',
+    password: '',
+    smartThingsHubIP: '10.0.0.200',
+    smartThingsAppId: '',
+    autoReconnect: true,
+    usageThreshold: 200, //Change in usage that determines when a special push to ST is made
+    maximumSecondsBetweenPush: 60, //Maximum number of seconds between data pushes to ST
+    minimumSecondsBetweenPush: 10 //Minimum number of seconds between data pushes to ST
 };
-module.exports = config;

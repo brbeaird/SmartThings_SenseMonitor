@@ -1,17 +1,17 @@
 {
-  "name": "smartthings_sensemonitor",
-  "version": "1.0.0",
-  "description": "Integrates Sense Energy Monitor with SmartThings",
-  "main": "server.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
-  },
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "request": "^2.87.0",
-    "request-promise": "^4.2.2",
-    "unofficial-sense": "^1.1.4"
-  }
+    "name": "smartthings_sensemonitor",
+    "version": "1.0.0",
+    "description": "Integrates Sense Energy Monitor with SmartThings",
+    "main": "server.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "start": "node server.js"
+    },
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "request": "^2.88.0",
+        "request-promise": "^4.2.2",
+        "unofficial-sense": "^1.1.4"
+    }
 }
