@@ -18,50 +18,111 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  */
- 
+
+import java.text.SimpleDateFormat
+
 metadata {
-	definition (name: "Sense Monitor Device", namespace: "brbeaird", author: "Brian Beaird") {		
+    definition (name: "Sense Monitor Device", namespace: "brbeaird", author: "Brian Beaird") {
         capability "Power Meter"
         capability "Switch"
         capability "Actuator"
         capability "Sensor"
         attribute "lastUpdated", "string"
-	}
-    
-    preferences {       
+        attribute "deviceLocation", "string"
+        attribute "dtCreated", "string"
+        attribute "deviceMake", "string"
+        attribute "deviceModel", "string"
+        attribute "detectionMature", "string"
+        attribute "deviceRevoked", "string"
+    }
+
+    preferences {
        input "prefNotifyOn", "bool", required: false, title: "Push notifications when turned on?"
        input "prefNotifyOnDelay", "number", required: false, title: "Delay notification until unit has remained ON for this many minutes"
        input "prefNotifyOff", "bool", required: false, title: "Push notifications when turned off?"
        input "prefNotifyOffDelay", "number", required: false, title: "Delay notification until unit has remained OFF for this many minutes"
     }
 
-	tiles {
-        
-        standardTile("switch", "device.switch", width: 1, height: 1, canChangeIcon: true) {
-            state "off", label: '${currentValue}', action: "switch.on",
-                  icon: "st.switches.switch.off", backgroundColor: "#ffffff"
-            state "on", label: '${currentValue}', action: "switch.off",
-                  icon: "st.switches.switch.on", backgroundColor: "#00a0dc"
+    tiles (scale: 2) {
+        multiAttributeTile(name:"genericMulti", type:"generic", width:6, height:4) {
+            tileAttribute("device.switch", key: "PRIMARY_CONTROL") {
+                attributeState "off", label: '${currentValue}', icon: "st.switches.switch.off", backgroundColor: "#ffffff"
+                attributeState "on", label: '${currentValue}', icon: "st.switches.switch.on", backgroundColor: "#00a0dc"
+            }
+            tileAttribute("device.power", key: "SECONDARY_CONTROL") {
+                attributeState "power", label: '${currentValue}W', unit: "W",
+                        foregroundColor: "#000000",
+                        backgroundColors:[
+                            [value: 1, color: "#00cc00"], //Light Green
+                            [value: 2000, color: "#79b821"], //Darker Green
+                            [value: 3000, color: "#ffa81e"], //Orange
+                            [value: 4000, color: "#FFF600"], //Yellow
+                            [value: 5000, color: "#fb1b42"] //Bright Red
+                        ]
+            }
         }
-        
         valueTile("power", "device.power", decoration: "flat", width: 1, height: 1) {
-            state "power", label:'${currentValue} Watts'
+            state "power", label:'${currentValue} W', unit: "W"
         }
-        
-        valueTile("lastUpdated", "device.lastUpdated", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
-			state("lastUpdatedValue", label:'Last updated: ${currentValue}', backgroundColor:"#ffffff")
-		}
-        
-        main(["power", "switch"])
-        details(["power", "switch", "lastUpdated"])
+        valueTile("blank1", "device.blank", height: 1, width: 1, inactiveLabel: false, decoration: "flat") {
+            state("default", label:'')
+        }
+        valueTile("blank2", "device.blank", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("default", label:'')
+        }
+        valueTile("lastUpdated", "device.lastUpdated", height: 1, width: 3, inactiveLabel: false, decoration: "flat") {
+            state("lastUpdated", label:'Last Updated: ${currentValue}')
+        }
+        valueTile("deviceLocation", "device.deviceLocation", height: 1, width: 3, inactiveLabel: false, decoration: "flat") {
+            state("deviceLocation", label:'Device Location:\n${currentValue}')
+        }
+        valueTile("dtCreated", "device.dtCreated", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("dtCreated", label:'Device Created: ${currentValue}')
+        }
+        valueTile("deviceMake", "device.deviceMake", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("deviceMake", label:'Device Make: ${currentValue}')
+        }
+        valueTile("deviceModel", "device.deviceModel", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("deviceModel", label:'Device Model: ${currentValue}')
+        }
+        valueTile("detectionMature", "device.detectionMature", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("detectionMature", label:'Mature Detection: ${currentValue}')
+        }
+        valueTile("deviceRevoked", "device.deviceRevoked", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("deviceRevoked", label:'Device Revoked: ${currentValue}')
+        }
+        main(["power"])
+        details(["genericMulti", "lastUpdated", "deviceLocation", "dtCreated", "deviceMake", "deviceModel", "detectionMature", "deviceRevoked"])
     }
 }
+
+def formatDt(String dt) {
+	def tf = new SimpleDateFormat("MM/d/yyyy hh:mm a")
+	tf.setTimeZone(location.timeZone)
+    return tf.format(Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", dt))
+}
+
+/*
+    make:
+    usage: 0
+    dateCreated: 2018-08-22T14:24:10.280Z
+    name: Microwave
+    mature: true
+    id: 0c699b67
+    revoked: false
+    state: off
+    location: Kitchen
+    currentlyOn: false
+    model:
+    icon: microwave
+    recentlyChanged: false
+*/
 
 //For testing only
 /*
 def on(){
 
-	log.debug "Scheduling push notification for ON!"
+    log.debug "Scheduling push notification for ON!"
     unschedule(checkForOnNotify)
     unschedule(checkForOffNotify)
     runIn(60*prefNotifyOnDelay, checkForOnNotify)
@@ -72,7 +133,7 @@ def on(){
 
 def off(){
     log.debug "Updating status to off"
-    //sendEvent(name: "switch", value: "off", display: true, displayed: true, isStateChange: true, descriptionText: device.displayName + " was off")    
+    //sendEvent(name: "switch", value: "off", display: true, displayed: true, isStateChange: true, descriptionText: device.displayName + " was off")
     log.debug "Scheduling push notification for OFF!"
     unschedule(checkForOnNotify)
     unschedule(checkForOffNotify)
@@ -90,72 +151,70 @@ def handlePendingNotification(lastActivated, lastCanceled, actionName, delayPref
     //If device has been canceled (opposite switch state activated) while we were waiting, bail out
     log.debug "Checking to see if pending " + actionName + " notification should be sent..."
     if (lastActivated == null){lastActivated = 0}
-    if (lastCanceled == null){lastCanceled = 0}    
+    if (lastCanceled == null){lastCanceled = 0}
     if (lastActivated < lastCanceled){
-    	log.debug "Device turned " + actionName + " before notification threshold. Notification canceled."
+        log.debug "Device turned " + actionName + " before notification threshold. Notification canceled."
         return
     }
-    
-    def timeSinceLastChange = ((now() - lastActivated) / 1000) + 10
-    def delayInSeconds = delayPref * 60    
-    if (timeSinceLastChange >= delayInSeconds)
-    {
-    	log.debug "Sending " + actionName + " notification"
+
+    Integer timeSinceLastChange = ((now() - lastActivated) / 1000) + 10
+    Integer delayInSeconds = delayPref * 60
+    if (timeSinceLastChange >= delayInSeconds) {
+        log.debug "Sending " + actionName + " notification"
         parent.sendPushMessage(getShortDevName() + " turned " + actionName + " (" + (Math.round(timeSinceLastChange / 60)) +  " minutes ago.)")
-        
+
         //if (actionName == "On"){state.OnNotificationIsPending = false}
         //if (actionName == "Off"){state.OffNotificationIsPending = false}
-    }
-    
-    //If it's not time yet, reschedule a check
-    else
-    {
-        def timeLeftTillNotify = delayInSeconds - timeSinceLastChange        
-        if (timeLeftTillNotify < 60) {timeLeftTillNotify = 60}
-        log.debug "Will check again in " + timeLeftTillNotify + " seconds"
-    	if (actionName == "On"){runIn(timeLeftTillNotify, checkForOnNotify)}
-        if (actionName == "Off"){runIn(timeLeftTillNotify, checkForOffNotify)}
+    } else { //If it's not time yet, reschedule a check
+        Integer timeLeftTillNotify = (delayInSeconds - timeSinceLastChange)
+        if (timeLeftTillNotify < 60) { timeLeftTillNotify = 60 }
+        log.debug "Will check again in $timeLeftTillNotify seconds"
+        if (actionName == "On") { runIn(timeLeftTillNotify, checkForOnNotify) }
+        if (actionName == "Off") { runIn(timeLeftTillNotify, checkForOffNotify) }
     }
 }
 
 def updateDeviceLastRefresh(lastRefresh){
     log.debug "Last refresh: " + lastRefresh
-    
     def refreshDate = new Date()
     def hour = refreshDate.format("h", location.timeZone)
     def minute =refreshDate.format("m", location.timeZone)
-    def ampm =refreshDate.format("a", location.timeZone)
+    def ampm = refreshDate.format("a", location.timeZone)
     //def finalString = refreshDate.getDateString() + ' ' + hour + ':' + minute + ampm
-    
-    def finalString = new Date().format('MM/d/yyyy hh:mm',location.timeZone)
-    sendEvent(name: "lastRefresh", value: finalString, display: false , displayed: false)
-}
 
+    def finalString = new Date().format('MM/dd/yyyy hh:mm a',location.timeZone)
+    if(isStateChange(device, "lastRefresh", finalString as String)) {
+        sendEvent(name: "lastRefresh", value: finalString, display: false, displayed: false)
+    }
+}
 
 def getShortDevName(){
-	return device.displayName.replace("Sense-", "")
+    return device?.displayName?.replace("Sense-", "")
 }
 
-def updateDeviceStatus(senseDevice){
-	def devName = getShortDevName()
-    def oldStatus = device.currentValue("switch")    
+def updateDeviceStatus(Map senseDevice){
+    String devName = getShortDevName()
+    String oldStatus = device.currentValue("switch")
+    // senseDevice?.each { k,v->
+    //     log.debug "${k}: ${v}"
+    // }
     
     //log.debug "Old status was " + oldStatus
     //log.debug "New status is: " + senseDevice.state
-    
-    def statusChange = false
-    
-    if (oldStatus != senseDevice.state){statusChange = true}
-    
+
+    Boolean statusChange = false
+
+    if (oldStatus != senseDevice.state) {statusChange = true }
+
     //If on/off status has changed
     if (statusChange){
-    	 if (senseDevice.state == "off"){
+         if (senseDevice?.state == "off"){
              log.debug "Updating status to off"
-             sendEvent(name: "switch", value: "off", display: true, displayed: true, isStateChange: true, descriptionText: device.displayName + " was off")
-             if (prefNotifyOff && !(parent.quietModes.contains(location.currentMode))){
+             sendEvent(name: "switch", value: "off", display: true, displayed: true, isStateChange: true, descriptionText: device?.displayName + " was off")
+             if (prefNotifyOff && !isQuietMode()){
                  //Depending on prefs, send notification immediately or schedule after delay
                  if (prefNotifyOffDelay == null || prefNotifyOffDelay == 0){
-                     parent.sendPushMessage(devName + " turned off!")
+                     parent?.sendPushMessage(devName + " turned off!")
                  }
                  else{
                      log.debug "Scheduling OFF push notification!"
@@ -170,7 +229,7 @@ def updateDeviceStatus(senseDevice){
         if (senseDevice.state == "on"){
             log.debug "Updating status to on"
             sendEvent(name: "switch", value: "on", display: true, displayed: true, isStateChange: true, descriptionText: device.displayName + " was on")
-            if (prefNotifyOn && !(parent.quietModes.contains(location.currentMode))){                                
+            if (prefNotifyOn && !isQuietMode()){
                 //Depending on prefs, send notification immediately or schedule after delay
                 if (prefNotifyOnDelay == null || prefNotifyOnDelay == 0){
                     parent.sendPushMessage(devName + " turned on!")
@@ -186,44 +245,77 @@ def updateDeviceStatus(senseDevice){
             }
         }
     }
-   
-   	def currentPower = senseDevice.usage
-    def oldPower = device.currentValue("power")
-    if (oldPower == null){oldPower = -1}
-    //def usageChangeThreshold = 100
-    //if (devName == "Always On"){usageChangeThreshold = 1}    
-    //if (oldPower == null){oldPower = 0}
-    //if (oldPower == null){oldPower = 0}
+
+    Float currentPower = senseDevice?.usage?.isNumber() ? senseDevice?.usage as Float : 0.0
+    Float oldPower = device.currentState("power")?.floatValue ?: -1
     
-    //Also update usage if status has changed or if usage value has changed by more than 100 watts
-    //if (statusChange || oldPower == 0 || (currentPower - oldPower).abs() >= usageChangeThreshold){    
-    
-    //Decide if we should update the usage
-    if (oldPower != currentPower){
-        def isUsageChange = true
-        def usageChange = (currentPower - oldPower).abs()
-    	if (devName == "Other" && usageChange < 30 && currentPower != 0){isUsageChange = false}
-        if (devName == "TotalUsage" && usageChange < 50 && currentPower != 0){isUsageChange = false}
-        
-        if (isUsageChange){        
-            log.debug "Updating usage from " + oldPower + " to " + currentPower
-            sendEvent(name: "power", value: currentPower, display: true, displayed: true, isStateChange: true)
+    if(senseDevice?.containsKey("dateCreated")) {
+        def dtCreated = formatDt(senseDevice?.dateCreated)
+        if(isStateChange(device, "dtCreated", dtCreated as String)) {
+            sendEvent(name: "dtCreated", value: dtCreated as String, display: true, displayed: true)
         }
     }
-    
+    String loc = senseDevice?.location ?: "Not Set"
+    if(isStateChange(device, "deviceLocation", loc?.toString())) {
+        sendEvent(name: "deviceLocation", value: loc?.toString(), display: true, displayed: true)
+    }
+
+    String make = senseDevice?.make ?: "Not Set"
+    if(isStateChange(device, "deviceMake", make?.toString())) {
+        sendEvent(name: "deviceMake", value: make?.toString(), display: true, displayed: true)
+    }
+
+    String model = senseDevice?.model ?: "Not Set"
+    if(isStateChange(device, "deviceModel", model?.toString())) {
+        sendEvent(name: "deviceModel", value: model?.toString(), display: true, displayed: true)
+    }
+    if(senseDevice?.containsKey("revoked")) {
+        if(isStateChange(device, "deviceRevoked", (senseDevice?.revoked == true)?.toString())) {
+            sendEvent(name: "deviceRevoked", value: (senseDevice?.deviceRevoked == true)?.toString(), display: true, displayed: true)
+        }
+    }
+    if(senseDevice?.containsKey("mature")) {
+        if(isStateChange(device, "detectionMature", (senseDevice?.mature == true)?.toString())) {
+            sendEvent(name: "detectionMature", value: (senseDevice?.mature == true)?.toString(), display: true, displayed: true)
+        }
+    }
+    //def usageChangeThreshold = 100
+    //if (devName == "Always On"){usageChangeThreshold = 1}
+    //if (oldPower == null){oldPower = 0}
+    //if (oldPower == null){oldPower = 0}
+
+    //Also update usage if status has changed or if usage value has changed by more than 100 watts
+    //if (statusChange || oldPower == 0 || (currentPower - oldPower).abs() >= usageChangeThreshold){
+
+    //Decide if we should update the usage
+    // log.debug "currentPower: ${currentPower} | oldPower: ${oldPower}"
+    if (oldPower && currentPower && oldPower != currentPower){
+        Boolean isUsageChange = true
+        def usageChange = (currentPower - oldPower).abs()
+        if (devName == "Other" && usageChange < 30 && currentPower != 0) { isUsageChange = false }
+        if (devName == "TotalUsage" && usageChange < 50 && currentPower != 0) { isUsageChange = false }
+
+        if (isUsageChange){
+            log.debug "Updating usage from $oldPower to $currentPower"
+            sendEvent(name: "power", value: currentPower, units: "W", display: true, displayed: true, isStateChange: true)
+        }
+    }
     updateDeviceLastRefresh()
 }
 
-def updateDeviceLastRefresh(){    
-    
+Boolean isQuietMode() {
+    return (parent.quietModes.contains(location?.currentMode))
+}
+
+def updateDeviceLastRefresh(){
     def finalString = new Date().format('MM/d/yyyy hh:mm',location.timeZone)
     sendEvent(name: "lastUpdated", value: finalString, display: false , displayed: false)
 }
 
 def log(msg){
-	log.debug msg
+    log.debug msg
 }
 
 def showVersion(){
-	return "0.0.1"
+    return "0.0.1"
 }

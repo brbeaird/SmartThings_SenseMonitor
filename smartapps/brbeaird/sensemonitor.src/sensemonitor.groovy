@@ -117,7 +117,7 @@ def lanEventHandler(evt) {
             //log.debug result.versionInfo.SmartApp
             result.devices.each { senseDevice ->
 
-                log.debug "senseDevice(${senseDevice.id}): ${senseDevice}"  //Yay
+                log.debug "senseDevice(${senseDevice.name}): ${senseDevice}"  //Yay
                 
                 //def senseDevice = result.devices[0]
                 def dni = [ app.id, (senseDevice != "SenseMonitor" ? "senseDevice" : ""), senseDevice.id].join('|')

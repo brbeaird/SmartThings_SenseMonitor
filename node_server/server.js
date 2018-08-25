@@ -30,13 +30,10 @@ var reconnectPending = false;
 var deviceList = {};
 var lastPush = new Date();
 lastPush.setDate(lastPush.getDate() - 1);
-var prevTotalUsage = 0;
-const arrSum = arr => arr.reduce((a, b) => Math.abs(a) + Math.abs(b), 0);
+// var prevTotalUsage = 0;
 
-function updDeviceItem(data, upd = false) {
-    if (!upd) {
-        console.log("Adding New Device: (" + data.name + ") to DevicesList...");
-    }
+function addDevice(data) {
+    console.log("Adding New Device: (" + data.name + ") to DevicesList...");
     if (data.id === "SenseMonitor") {
         deviceList[data.id] = data;
     } else {
@@ -51,9 +48,6 @@ function updDeviceItem(data, upd = false) {
         };
 
         if (data.id !== "SenseMonitor") {
-            if (upd) {
-                devData = data;
-            }
             devData.location = data.location || "";
             devData.make = data.make || "";
             devData.model = data.model || "";
@@ -68,13 +62,6 @@ function updDeviceItem(data, upd = false) {
     }
 }
 
-function tsLogger(msg) {
-    let dt = new Date().toLocaleString();
-    console.log(dt + ' | ' + msg);
-}
-
-getData();
-
 function getData() {
     //On initial load, get basic list of devices
     sense({ email: email, password: password, verbose: false })
@@ -84,7 +71,7 @@ function getData() {
             mySense.getDevices().then(devices => {
                 // console.log("devices:", devices);
                 for (let dev of devices) {
-                    updDeviceItem(dev);
+                    addDevice(dev);
                 }
             });
 
@@ -111,6 +98,11 @@ function getData() {
                 });
             });
 
+            function tsLogger(msg) {
+                let dt = new Date().toLocaleString();
+                console.log(dt + ' | ' + msg);
+            }
+
             function updateMonitorInfo() {
                 mySense.getMonitorInfo().then(monitor => {
                     // console.log('MonitorInfo:', monitor);
@@ -134,7 +126,7 @@ function getData() {
                     if (deviceList["SenseMonitor"]) {
                         deviceList["SenseMonitor"] = devData;
                     } else {
-                        updDeviceItem(devData);
+                        addDevice(devData);
                     }
                 });
             }
@@ -182,7 +174,7 @@ function getData() {
                         for (const dev of data.payload.devices) {
                             //If Device is NEW make a new spot for it in the deviceMap
                             if (!deviceList[dev.id]) {
-                                updDeviceItem(dev);
+                                addDevice(dev);
                             }
                             // console.log('key(' + dev.id + '):', dev.tags);
 
@@ -211,11 +203,22 @@ function getData() {
                             deviceList[dev.id].state = "on";
                             deviceList[dev.id].usage = convUsage(dev.w);
                             deviceList[dev.id].currentlyOn = true;
+                            if (dev.id !== "SenseMonitor") {
+                                deviceList[dev.id].location = dev.location || "";
+                                deviceList[dev.id].make = dev.make || "";
+                                deviceList[dev.id].model = dev.model || "";
+                                deviceList[dev.id].icon = dev.icon || "";
+                                if (dev.tags) {
+                                    deviceList[dev.id].mature = (dev.tags.Mature === "true") || false;
+                                    deviceList[dev.id].revoked = (dev.tags.Revoked === "true") || false;
+                                    deviceList[dev.id].dateCreated = dev.tags.DateCreated || "";
+                                }
+                            }
                         }
 
                         //Convert list to array for easier parsing in ST
                         var devArray = [];
-                        var totalUseArr = [];
+
                         //Loop over saved list again and mark any remaining devices as off
                         Object.keys(deviceList).forEach(function(key) {
                             if (key !== "SenseMonitor") {
@@ -252,12 +255,8 @@ function getData() {
 
                         if (updateNow || secondsSinceLastPush >= maximumSecondsBetweenPush) {
                             //console.log("Sending data to SmartThings hub");
-                            prevTotalUsage = convUsage(arrSum(totalUseArr)) || 0; //Save current total for future comparison
+                            //prevTotalUsage = convUsage(arrSum(totalUseArr)) || 0; //Save current total for future comparison
                             // console.log('PrevTotalUsage:', prevTotalUsage);
-                            // Update devices with new metadata
-                            for (const dev of data.payload.devices) {
-                                updDeviceItem(dev, true);
-                            }
                             updateMonitorInfo();
                             lastPush = new Date();
                             var options = {
@@ -272,7 +271,7 @@ function getData() {
                                 json: true // Automatically stringifies  the body to JSON
                             };
 
-                            if (config.smartThingsAppId !== undefined || config.smartThingsAppId !== '') {
+                            if (smartThingsAppId !== undefined || smartThingsAppId !== '') {
                                 options.headers.senseAppId = config.smartThingsAppId;
                             }
                             //Send to SmartThings!
@@ -292,3 +291,6 @@ function getData() {
             return;
         });
 }
+
+// Runs this whole thing
+getData();
