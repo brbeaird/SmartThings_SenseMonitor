@@ -2,7 +2,7 @@
  *	Sense Monitor SmartApp
  *
  *	Author: Brian Beaird
- *  Last Updated: 2018-08-24 (By A. Santilli)
+ *  Last Updated: 2018-08-26 (By A. Santilli)
  *
  *
  *  Copyright 2018 Brian Beaird
@@ -26,9 +26,9 @@ definition(
     author: "Brian Beaird",
     description: "Connects SmartThings with Sense",
     category: "My Apps",
-    iconUrl: "https://raw.githubusercontent.com/brbeaird/SmartThings_SenseMonitor/master/icons/sense.1x.png",
-    iconX2Url: "https://raw.githubusercontent.com/brbeaird/SmartThings_SenseMonitor/master/icons/sense.2x.png",
-    iconX3Url: "https://raw.githubusercontent.com/brbeaird/SmartThings_SenseMonitor/master/icons/sense.3x.png")
+    iconUrl: "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/sense.1x.png",
+    iconX2Url: "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/sense.2x.png",
+    iconX3Url: "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/sense.3x.png")
 
 
 preferences {
@@ -36,6 +36,19 @@ preferences {
     //TODO: Add version Checking
     //TODO: Add preference to exclude Sense devices
     //TODO: Add preference to NOT auto re-sync names
+}
+
+String appVersion() { return "0.2.0" }
+String appAuthor() { return "Brian Beaird" }
+String gitBranch() { return "tonesto7" }
+String getAppImg(imgName) 	{ return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
+
+def appInfoSect(sect=true)	{
+	def str = ""
+    str += "${app?.name}"
+    str += "\nAuthor: ${appAuthor()}"
+    str += "\nVersion: ${state.thisSmartAppVersion}"
+    section() { paragraph str, image: getAppImg("sense.2x.png") }
 }
 
 def prefConfigure(){
@@ -46,16 +59,34 @@ def prefConfigure(){
     state.thisSmartAppVersion = "0.1.0"
     getVersionInfo(0, 0)
 
-
     return dynamicPage(name: "prefConfigure", title: "Configure Sense Devices", uninstall:true, install: true) {
-        section("Filter Notifications") {
-            input "quietModes", "mode", title: "Do not send push notifications during these modes", multiple: true
+        appInfoSect()
+        section("Discovered Devices:") {
+            List devs = getDeviceList()?.collect { "${it?.value?.name} (${it?.value?.usage ?: 0} W)" }?.sort()
+            paragraph "${devs?.size() ? devs?.join("\n") : "No Devices Available"}"
+        }
+        section("Notification Filters:") {
+            input "quietModes", "mode", title: "Don't Notify in These Modes!", multiple: true, submitOnChange: true
         }
     }
 }
 
+Map getDeviceList(isInputEnum=false, hideDefaults=true) {
+    Map devMap = [:]
+    Map availDevs = atomicState?.senseDeviceMap ?: [:]
+    availDevs?.each { key, val->
+        if(hideDefaults) { 
+            if(!(key?.toString() in ["TotalUsage", "unknown", "SenseMonitor", "always_on"])) {
+                devMap[key] = val
+            }
+        } else { devMap[key] = val }
+    }
+    return isInputEnum ? (devMap?.size() ? devMap?.collectEntries { [(it?.key):it?.value?.name] } : devMap) : devMap
+}
+
 def installed() {
     log.debug "Installed with settings: ${settings}"
+    state?.isInstalled = true
     initialize()
 }
 
@@ -63,6 +94,7 @@ def updated() {
     if (state.previousVersion != state.thisSmartAppVersion){
         getVersionInfo(state.previousVersion, state.thisSmartAppVersion);
     }
+    state?.isInstalled = true
     unsubscribe()
     initialize()
 }
@@ -115,8 +147,9 @@ def lanEventHandler(evt) {
 
         if (result.devices){
             //log.debug result.versionInfo.SmartApp
+            Map senseDeviceMap = [:]
             result.devices.each { senseDevice ->
-
+                senseDeviceMap[senseDevice?.id] = senseDevice
                 log.debug "senseDevice(${senseDevice.name}): ${senseDevice}"  //Yay
                 
                 //def senseDevice = result.devices[0]
@@ -124,7 +157,7 @@ def lanEventHandler(evt) {
                 //log.debug "device DNI will be: " + dni + " for " + senseDevice.name
                 def childDevice = getChildDevice(dni)
                 def childDeviceAttrib = [:]
-                def fullName = senseDevice.id != "SenseMonitor" ? "Sense-" + senseDevice.name : senseDevice.name
+                def fullName = senseDevice?.id != "SenseMonitor" ? "Sense-" + senseDevice?.name : senseDevice.name
                 if (!childDevice){
                     log.debug "name will be: " + fullName
                     //childDeviceAttrib = ["name": senseDevice.name, "completedSetup": true]
@@ -156,6 +189,7 @@ def lanEventHandler(evt) {
                     //}
                 }
             }
+            atomicState?.senseDeviceMap = senseDeviceMap
         }
     }
 }
@@ -166,6 +200,28 @@ def getVersionInfo(oldVersion, newVersion){
         contentType: 'application/json'
     ]
     asynchttp_v1.get('responseHandlerMethod', params)
+}
+
+private getVersionData() {
+    def params = [
+        uri:  "https://raw.githubusercontent.com/tonesto7/SmartThings_SenseMonitor/master/resources/versions.json",
+        contentType: 'application/json'
+    ]
+    asynchttp_v1.get('responseHandlerMethod', params)
+}
+
+private versionDataRespHandler(resp, data) {
+    if(resp.hasError()) {
+
+    } else {
+        if(resp.data) {
+            log.info "Getting Latest Version Data from versions.json File..."
+            state?.versionData = resp?.data
+            state?.lastVerUpdDt = getDtNow()
+            updateHandler()
+        }
+        log.trace ("getWebFileData Resp: ${resp?.data}")
+    }
 }
 
 def responseHandlerMethod(response, data) {
@@ -208,3 +264,108 @@ def versionCheck(){
 
     log.debug state.versionWarning
 }
+
+def updateHandler() {
+	//log.trace "updateHandler..."
+	if(state?.isInstalled) {
+		if(state?.versionData?.updater?. && atomicState?.lastCritUpdateInfo?.ver.toInteger() != atomicState?.appData?.updater?.updateVer.toInteger()) {
+			if(sendMsgNew("Critical", "There are Critical Updates available for the Efergy Manager Application!!! Please visit the IDE and make sure to update the App and Device Code...")) {
+				atomicState?.lastCritUpdateInfo = ["dt":getDtNow(), "ver":atomicState?.appData?.updater?.updateVer?.toInteger()]
+			}
+		}
+		if(atomicState?.appData?.updater?.updateMsg != "" && atomicState?.appData?.updater?.updateMsg != atomicState?.lastUpdateMsg) {
+			if(getLastUpdateMsgSec() > 86400) {
+				if(sendMsgNew("Info", "${atomicState?.updater?.updateMsg}")) {
+					atomicState?.lastUpdateMsgDt = getDtNow()
+				}
+			}
+		}
+	}
+}
+
+def isCodeUpdateAvailable(String newVer, String curVer, String type) {
+	Boolean result = false
+	def latestVer
+	if(newVer && curVer) {
+		List versions = [newVer, curVer]
+		if(newVer != curVer) {
+			latestVer = versions?.max { a, b ->
+				List verA = a?.tokenize('.')
+				List verB = b?.tokenize('.')
+				Integer commonIndices = Math.min(verA?.size(), verB?.size())
+				for (int i = 0; i < commonIndices; ++i) {
+					//log.debug "comparing $numA and $numB"
+					if(verA[i]?.toInteger() != verB[i]?.toInteger()) {
+						return verA[i]?.toInteger() <=> verB[i]?.toInteger()
+					}
+				}
+				verA?.size() <=> verB?.size()
+			}
+			result = (latestVer == newVer) ? true : false
+		}
+	}
+	// log.trace ("type: $type | newVer: $newVer | curVer: $curVer | newestVersion: ${latestVer} | result: $result")
+	return result
+}
+
+def isAppUpdateAvail() {
+	if(isCodeUpdateAvailable(atomicState?.appData?.updater?.versions?.app?.ver, appVer(), "manager")) { return true }
+	return false
+}
+
+def isDevUpdateAvail() {
+	if(isCodeUpdateAvailable(atomicState?.appData?.updater?.versions?.dev?.ver, atomicState?.devVer, "dev")) { return true }
+	return false
+}
+
+def formatDt(dt, tzChg=true) {
+	def tf = new SimpleDateFormat("E MMM dd HH:mm:ss z yyyy")
+	if(tzChg) { if(getTimeZone()){ tf.setTimeZone(getTimeZone()) } }
+	return tf?.format(dt)
+}
+
+def parseDt(pFormat, dt, tzFmt=true) {
+	def result
+	def newDt = Date.parse("$pFormat", dt)
+	result = formatDt(newDt, tzFmt)
+	//log.debug "parseDt Result: $result"
+	return result
+}
+
+def getDtNow() {
+	def now = new Date()
+	return formatDt(now)
+}
+
+def GetTimeDiffSeconds(lastDate, sender=null) {
+	try {
+		if(lastDate?.contains("dtNow")) { return 10000 }
+		def now = new Date()
+		def lastDt = Date.parse("E MMM dd HH:mm:ss z yyyy", lastDate)
+		def start = Date.parse("E MMM dd HH:mm:ss z yyyy", formatDt(lastDt)).getTime()
+		def stop = Date.parse("E MMM dd HH:mm:ss z yyyy", formatDt(now)).getTime()
+		def diff = (int) (long) (stop - start) / 1000
+		return diff
+	}
+	catch (ex) {
+		log.error "GetTimeDiffSeconds Exception: (${sender ? "$sender | " : ""}lastDate: $lastDate):", ex
+		return 10000
+	}
+}
+
+//PushOver-Manager Input Generation Functions
+private getPushoverSounds(){return (Map) atomicState?.pushoverManager?.sounds?:[:]}
+private getPushoverDevices(){List opts=[];Map pmd=atomicState?.pushoverManager?:[:];pmd?.apps?.each{k,v->if(v&&v?.devices&&v?.appId){Map dm=[:];v?.devices?.sort{}?.each{i->dm["${i}_${v?.appId}"]=i};addInputGrp(opts,v?.appName,dm);}};return opts;}
+private inputOptGrp(List groups,String title){def group=[values:[],order:groups?.size()];group?.title=title?:"";groups<<group;return groups;}
+private addInputValues(List groups,String key,String value){def lg=groups[-1];lg["values"]<<[key:key,value:value,order:lg["values"]?.size()];return groups;}
+private listToMap(List original){original.inject([:]){r,v->r[v]=v;return r;}}
+private addInputGrp(List groups,String title,values){if(values instanceof List){values=listToMap(values)};values.inject(inputOptGrp(groups,title)){r,k,v->return addInputValues(r,k,v)};return groups;}
+private addInputGrp(values){addInputGrp([],null,values)}
+//PushOver-Manager Location Event Subscription Events, Polling, and Handlers
+public pushover_init(){subscribe(location,"pushoverManager",pushover_handler);pushover_poll()}
+public pushover_cleanup(){state?.remove("pushoverManager");unsubscribe("pushoverManager");}
+public pushover_poll(){sendLocationEvent(name:"pushoverManagerCmd",value:"poll",data:[empty:true],isStateChange:true,descriptionText:"Sending Poll Event to Pushover-Manager")}
+public pushover_msg(List devs,Map data){if(devs&&data){sendLocationEvent(name:"pushoverManagerMsg",value:"sendMsg",data:data,isStateChange:true,descriptionText:"Sending Message to Pushover Devices: ${devs}");}}
+public pushover_handler(evt){Map pmd=atomicState?.pushoverManager?:[:];switch(evt?.value){case"refresh":def ed = evt?.jsonData;String id = ed?.appId;Map pA = pmd?.apps?.size() ? pmd?.apps : [:];if(id){pA[id]=pA?."${id}"instanceof Map?pA[id]:[:];pA[id]?.devices=ed?.devices?:[];pA[id]?.appName=ed?.appName;pA[id]?.appId=id;pmd?.apps = pA;};pmd?.sounds=ed?.sounds;break;case "reset":pmd=[:];break;};atomicState?.pushoverManager=pmd;}
+//Builds Map Message object to send to Pushover Manager
+private buildPushMessage(List devices,Map msgData,timeStamp=false){if(!devices||!msgData){return};Map data=[:];data?.appId=app?.getId();data.devices=devices;data?.msgData=msgData;if(timeStamp){data?.msgData?.timeStamp=new Date().getTime()};pushover_msg(devices,data);}
