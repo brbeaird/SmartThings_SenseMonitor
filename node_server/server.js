@@ -103,14 +103,14 @@ function getData() {
                 console.log(dt + ' | ' + msg);
             }
 
-            function updateMonitorInfo() {
+            function updateMonitorInfo(usageVal = 0) {
                 mySense.getMonitorInfo().then(monitor => {
                     // console.log('MonitorInfo:', monitor);
                     let devData = {
                         id: "SenseMonitor",
                         name: "Sense Monitor",
                         state: "on",
-                        usage: 0,
+                        usage: usageVal,
                         monitorData: {
                             online: (monitor.monitor_info.online === true) || false,
                             mac: monitor.monitor_info.mac || "",
@@ -239,12 +239,12 @@ function getData() {
 
                         //Keep track of the total so we can send an overall total device
                         //Add in "total" device
-                        devArray.push({
-                            id: 'TotalUsage',
-                            name: 'TotalUsage',
-                            state: 'on',
-                            usage: convUsage(data.payload.w) || 0
-                        });
+                        // devArray.push({
+                        //     id: 'TotalUsage',
+                        //     name: 'TotalUsage',
+                        //     state: 'on',
+                        //     usage: 
+                        // });
 
                         var secondsSinceLastPush = (Date.now() - lastPush.getTime()) / 1000;
                         // console.log('devArray: ', devArray);
@@ -257,7 +257,7 @@ function getData() {
                             //console.log("Sending data to SmartThings hub");
                             //prevTotalUsage = convUsage(arrSum(totalUseArr)) || 0; //Save current total for future comparison
                             // console.log('PrevTotalUsage:', prevTotalUsage);
-                            updateMonitorInfo();
+                            updateMonitorInfo(convUsage(data.payload.w) || 0);
                             lastPush = new Date();
                             var options = {
                                 method: 'POST',

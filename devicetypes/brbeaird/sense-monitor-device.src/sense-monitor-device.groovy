@@ -20,6 +20,7 @@
  */
 
 import java.text.SimpleDateFormat
+String devVersion() { return "0.2.0"}
 
 metadata {
     definition (name: "Sense Monitor Device", namespace: "brbeaird", author: "Brian Beaird") {
@@ -96,27 +97,26 @@ metadata {
     }
 }
 
-def formatDt(String dt) {
-	def tf = new SimpleDateFormat("MM/d/yyyy hh:mm a")
-	tf.setTimeZone(location.timeZone)
-    return tf.format(Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", dt))
+def installed() {
+	log.trace "${device?.displayName} Executing Installed..."
+    def dt = formatDt(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
+    state?.dateCreated = dt
+	initialize()
 }
 
-/*
-    make:
-    usage: 0
-    dateCreated: 2018-08-22T14:24:10.280Z
-    name: Microwave
-    mature: true
-    id: 0c699b67
-    revoked: false
-    state: off
-    location: Kitchen
-    currentlyOn: false
-    model:
-    icon: microwave
-    recentlyChanged: false
-*/
+def updated() {
+	log.trace "${device?.displayName} Executing Updated..."
+	initialize()
+}
+
+def initialize() {
+	log.trace "${device?.displayName} Executing initialize"
+ 	sendEvent(name: "DeviceWatch-DeviceStatus", value: "online")
+	sendEvent(name: "DeviceWatch-Enroll", value: [protocol: "cloud", scheme:"untracked"].encodeAsJson(), displayed: false)
+}
+
+
+
 
 //For testing only
 /*
@@ -161,7 +161,8 @@ def handlePendingNotification(lastActivated, lastCanceled, actionName, delayPref
     Integer delayInSeconds = delayPref * 60
     if (timeSinceLastChange >= delayInSeconds) {
         log.debug "Sending " + actionName + " notification"
-        parent.sendPushMessage(getShortDevName() + " turned " + actionName + " (" + (Math.round(timeSinceLastChange / 60)) +  " minutes ago.)")
+        // sendMsg(String msgType, String msg, Boolean showEvt=true, Map pushoverMap=null, sms=null, push=null)
+        parent?.sendMsg("Sense Alert", getShortDevName() + " turned " + actionName + " (" + (Math.round(timeSinceLastChange / 60)) +  " minutes ago.)")
 
         //if (actionName == "On"){state.OnNotificationIsPending = false}
         //if (actionName == "Off"){state.OffNotificationIsPending = false}
@@ -204,14 +205,14 @@ def updateDeviceStatus(Map senseDevice){
 
     Boolean statusChange = false
 
-    if (oldStatus != senseDevice.state) {statusChange = true }
+    if (oldStatus != senseDevice.state) { statusChange = true }
 
     //If on/off status has changed
     if (statusChange){
          if (senseDevice?.state == "off"){
              log.debug "Updating status to off"
              sendEvent(name: "switch", value: "off", display: true, displayed: true, isStateChange: true, descriptionText: device?.displayName + " was off")
-             if (prefNotifyOff && !isQuietMode()){
+             if (prefNotifyOff && ok2Notify()){
                  //Depending on prefs, send notification immediately or schedule after delay
                  if (prefNotifyOffDelay == null || prefNotifyOffDelay == 0){
                      parent?.sendPushMessage(devName + " turned off!")
@@ -229,7 +230,7 @@ def updateDeviceStatus(Map senseDevice){
         if (senseDevice.state == "on"){
             log.debug "Updating status to on"
             sendEvent(name: "switch", value: "on", display: true, displayed: true, isStateChange: true, descriptionText: device.displayName + " was on")
-            if (prefNotifyOn && !isQuietMode()){
+            if (prefNotifyOn && ok2Notify()){
                 //Depending on prefs, send notification immediately or schedule after delay
                 if (prefNotifyOnDelay == null || prefNotifyOnDelay == 0){
                     parent.sendPushMessage(devName + " turned on!")
@@ -249,12 +250,20 @@ def updateDeviceStatus(Map senseDevice){
     Float currentPower = senseDevice?.usage?.isNumber() ? senseDevice?.usage as Float : 0.0
     Float oldPower = device.currentState("power")?.floatValue ?: -1
     
+    if(senseDevice?.id == "SenseMonitor") {
+        senseDevice?.location = "Electrical Panel"
+        senseDevice?.make = "Sense"
+        senseDevice?.model = "Monitor"
+    }
+
     if(senseDevice?.containsKey("dateCreated")) {
-        def dtCreated = formatDt(senseDevice?.dateCreated)
+        def dtCreated = senseDevice?.dateCreated ? parseDt(senseDevice?.dateCreated, "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'") : (state?.dateCreated ?: "")
         if(isStateChange(device, "dtCreated", dtCreated as String)) {
             sendEvent(name: "dtCreated", value: dtCreated as String, display: true, displayed: true)
         }
     }
+
+    
     String loc = senseDevice?.location ?: "Not Set"
     if(isStateChange(device, "deviceLocation", loc?.toString())) {
         sendEvent(name: "deviceLocation", value: loc?.toString(), display: true, displayed: true)
@@ -270,6 +279,7 @@ def updateDeviceStatus(Map senseDevice){
         sendEvent(name: "deviceModel", value: model?.toString(), display: true, displayed: true)
     }
     if(senseDevice?.containsKey("revoked")) {
+        sendEvent(name: "DeviceWatch-DeviceStatus", value: (senseDevice?.revoked == true) ? "offline" : "online", displayed: true, isStateChange: true)
         if(isStateChange(device, "deviceRevoked", (senseDevice?.revoked == true)?.toString())) {
             sendEvent(name: "deviceRevoked", value: (senseDevice?.deviceRevoked == true)?.toString(), display: true, displayed: true)
         }
@@ -303,8 +313,17 @@ def updateDeviceStatus(Map senseDevice){
     updateDeviceLastRefresh()
 }
 
-Boolean isQuietMode() {
-    return (parent.quietModes.contains(location?.currentMode))
+def formatDt(dt, String tzFmt=("MM/d/yyyy hh:mm a")) {
+	def tf = new SimpleDateFormat(tzFmt); tf.setTimeZone(location.timeZone);
+    return tf.format(dt)
+}
+
+def parseDt(dt, dtFmt) {
+    return Date.parse(dtFmt, dt)
+}
+
+Boolean ok2Notify() {
+    return (parent?.getOk2Notify())
 }
 
 def updateDeviceLastRefresh(){
