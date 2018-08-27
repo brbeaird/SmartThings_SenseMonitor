@@ -26,7 +26,7 @@ String gitBranch() { return "tonesto7" }
 String getAppImg(imgName) 	{ return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
 
 definition(
-	name: "SenseMonitor App",
+	name: "Sense Monitor App",
 	namespace: "brbeaird",
 	author: "Brian Beaird",
 	description: "Connects SmartThings with Sense",
@@ -251,7 +251,7 @@ def uninstalled() {
 
 def initialize() {
 	// listen to LAN incoming messages
-	app?.updateLabel("SenseMonitor App")
+	app?.updateLabel("Sense Monitor App")
 	runEvery5Minutes("notificationCheck")
 	subscribe(app, onAppTouch)
 	subscribe(location, null, lanEventHandler, [filterEvents:false])
