@@ -40,7 +40,9 @@ metadata {
         attribute "detectionsPending", "string"
     }
 
-    preferences { }
+    preferences { 
+        input "showLogs", "bool", required: false, title: "Show Debug Logs?", defaultValue: false
+    }
 
     tiles (scale: 2) {
         multiAttributeTile(name:"genericMulti", type:"generic", width:6, height:4) {
@@ -60,7 +62,7 @@ metadata {
             }
         }
         valueTile("power", "device.power", decoration: "flat", width: 1, height: 1) {
-            state "power", label:'${currentValue} W', unit: "W"
+            state "power", label:'${currentValue} W', unit: "W", icon: "https://raw.githubusercontent.com/tonesto7/SmartThings_SenseMonitor/master/resources/icons/sense_monitor.png"
         }
         valueTile("blank1", "device.blank", height: 1, width: 1, inactiveLabel: false, decoration: "flat") {
             state("default", label:'')
@@ -117,7 +119,7 @@ def initialize() {
 }
 
 def updateDeviceLastRefresh(lastRefresh){
-    log.debug "Last refresh: " + lastRefresh
+    logger("debug", "Last refresh: " + lastRefresh)
     def refreshDate = new Date()
     def hour = refreshDate.format("h", location.timeZone)
     def minute =refreshDate.format("m", location.timeZone)
@@ -138,14 +140,14 @@ def updateDeviceStatus(Map senseDevice){
     String devName = getShortDevName()
 
     senseDevice?.monitorData?.each { k,v ->
-        log.debug "$k: $v"
+        logger("debug", "$k: $v")
     }
     Float currentPower = senseDevice?.usage?.isNumber() ? senseDevice?.usage as Float : 0.0
     Float oldPower = device.currentState("power")?.floatValue ?: -1
     if (oldPower != currentPower) {
         def usageChange = (currentPower - oldPower).abs()
         if (isStateChange(device, "power", currentPower?.toString())) {
-            log.debug "Updating usage from $oldPower to $currentPower"
+            logger("debug", "Updating usage from $oldPower to $currentPower")
             sendEvent(name: "power", value: currentPower, units: "W", display: true, displayed: true, isStateChange: true)
         }
     }
@@ -156,7 +158,7 @@ def updateDeviceStatus(Map senseDevice){
         if(isStateChange(device, "firmwareVer", firmwareVer?.toString())) {
             sendEvent(name: "firmwareVer", value: firmwareVer?.toString(), display: true, displayed: true)
         }
-        log.debug "voltage: ${senseDevice?.monitorData?.voltage}"
+        logger("debug", "voltage: ${senseDevice?.monitorData?.voltage}")
         String volt1 = senseDevice?.monitorData?.voltage && senseDevice?.monitorData?.voltage[0] ? senseDevice?.monitorData?.voltage[0] : "Not Set"
         if(isStateChange(device, "phase1Voltage", volt1?.toString())) {
             sendEvent(name: "phase1Voltage", value: volt1?.toString(), display: true, displayed: true)
@@ -184,7 +186,7 @@ def updateDeviceStatus(Map senseDevice){
         }
 
         String pending = (senseDevice?.monitorData?.detectionsPending?.size()) ? senseDevice?.monitorData?.detectionsPending?.collect { "${it?.name} (${it?.progress}%)"}?.join("\n") : "Nothing Pending..."
-        // log.debug "pending: $pending"
+        logger("debug", "pending: $pending")
         if(isStateChange(device, "detectionsPending", pending?.toString())) {
             sendEvent(name: "detectionsPending", value: pending?.toString(), display: true, displayed: true)
         }
@@ -217,8 +219,10 @@ def updateDeviceLastRefresh(){
     sendEvent(name: "lastUpdated", value: finalString, display: false , displayed: false)
 }
 
-def log(msg){
-    log.debug msg
+private logger(type, msg) {
+	if(type && msg && settings?.showLogs) {
+		log."${type}" "${msg}"
+	}
 }
 
 def showVersion(){

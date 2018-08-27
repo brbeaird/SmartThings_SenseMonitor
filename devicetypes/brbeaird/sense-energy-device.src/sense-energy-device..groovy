@@ -43,6 +43,7 @@ metadata {
        input "prefNotifyOnDelay", "number", required: false, title: "Delay notification until unit has remained ON for this many minutes"
        input "prefNotifyOff", "bool", required: false, title: "Push notifications when turned off?"
        input "prefNotifyOffDelay", "number", required: false, title: "Delay notification until unit has remained OFF for this many minutes"
+       input "showLogs", "bool", required: false, title: "Show Debug Logs?", defaultValue: false
     }
 
     tiles (scale: 2) {
@@ -197,21 +198,18 @@ def updateDeviceStatus(Map senseDevice){
     //log.debug "Old status was " + oldStatus
     //log.debug "New status is: " + senseDevice.state
 
-    Boolean statusChange = false
-
-    if (oldStatus != senseDevice.state) { statusChange = true }
+    Boolean statusChange = (oldStatus != senseDevice.state)
 
     //If on/off status has changed
     if (statusChange){
          if (senseDevice?.state == "off"){
-             log.debug "Updating status to off"
+             log.debug "Change Switch Status to: (OFF)"
              sendEvent(name: "switch", value: "off", display: true, displayed: true, isStateChange: true, descriptionText: device?.displayName + " was off")
              if (prefNotifyOff && ok2Notify()){
                  //Depending on prefs, send notification immediately or schedule after delay
                  if (prefNotifyOffDelay == null || prefNotifyOffDelay == 0){
-                     parent?.sendPushMessage(devName + " turned off!")
-                 }
-                 else{
+                     parent?.sendMsg("Sense Device State Alert", devName + " turned off!")
+                 } else {
                      log.debug "Scheduling OFF push notification!"
                      unschedule(checkForOnNotify)
                      unschedule(checkForOffNotify)
@@ -222,14 +220,13 @@ def updateDeviceStatus(Map senseDevice){
              }
         }
         if (senseDevice.state == "on"){
-            log.debug "Updating status to on"
+            log.debug "Change Switch Status to: (ON)"
             sendEvent(name: "switch", value: "on", display: true, displayed: true, isStateChange: true, descriptionText: device.displayName + " was on")
             if (prefNotifyOn && ok2Notify()){
                 //Depending on prefs, send notification immediately or schedule after delay
                 if (prefNotifyOnDelay == null || prefNotifyOnDelay == 0){
-                    parent.sendPushMessage(devName + " turned on!")
-                }
-                else{
+                    parent?.sendMsg("Sense Device State Alert", devName + " turned on!")
+                } else{
                     log.debug "Scheduling ON push notification!"
                     unschedule(checkForOnNotify)
                     unschedule(checkForOffNotify)
@@ -268,7 +265,6 @@ def updateDeviceStatus(Map senseDevice){
         sendEvent(name: "deviceModel", value: model?.toString(), display: true, displayed: true)
     }
     if(senseDevice?.containsKey("revoked")) {
-        setOnlineStatus((senseDevice?.revoked == true) ? false : true)
         if(isStateChange(device, "deviceRevoked", (senseDevice?.revoked == true)?.toString())) {
             sendEvent(name: "deviceRevoked", value: (senseDevice?.deviceRevoked == true)?.toString(), display: true, displayed: true)
         }
@@ -287,11 +283,11 @@ def updateDeviceStatus(Map senseDevice){
         if (devName == "TotalUsage" && usageChange < 50 && currentPower != 0) { isUsageChange = false }
 
         if (isStateChange(device, "power", currentPower?.toString())) {
-            log.debug "Updating usage from $oldPower to $currentPower"
+            logger("debug", "Updating usage from $oldPower to $currentPower")
             sendEvent(name: "power", value: currentPower, units: "W", display: true, displayed: true, isStateChange: true)
         }
     }
-    setOnlineStatus(true)
+    setOnlineStatus((senseDevice?.revoked == true) ? false : true)
     updateDeviceLastRefresh()
 }
 
@@ -319,8 +315,10 @@ def updateDeviceLastRefresh(){
     sendEvent(name: "lastUpdated", value: finalString, display: false , displayed: false)
 }
 
-def log(msg){
-    log.debug msg
+private logger(type, msg) {
+	if(type && msg && settings?.showLogs) {
+		log."${type}" "${msg}"
+	}
 }
 
 def showVersion(){
