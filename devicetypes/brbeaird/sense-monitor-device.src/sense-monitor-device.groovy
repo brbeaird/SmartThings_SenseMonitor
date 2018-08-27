@@ -31,8 +31,8 @@ metadata {
         
         attribute "lastUpdated", "string"
         attribute "firmwareVer", "string"
-        attribute "rail1Voltage", "string"
-        attribute "rail2Voltage", "string"
+        attribute "phase1Voltage", "string"
+        attribute "phase2Voltage", "string"
         attribute "cycleHz", "string"
         attribute "wifi_ssid", "string"
         attribute "wifi_signal", "string"
@@ -44,7 +44,6 @@ metadata {
 
     tiles (scale: 2) {
         multiAttributeTile(name:"genericMulti", type:"generic", width:6, height:4) {
-            
             tileAttribute("device.power", key: "PRIMARY_CONTROL") {
                 attributeState "power", label: '${currentValue}W', unit: "W",
                         foregroundColor: "#000000",
@@ -72,13 +71,15 @@ metadata {
         valueTile("lastUpdated", "device.lastUpdated", height: 1, width: 3, inactiveLabel: false, decoration: "flat") {
             state("lastUpdated", label:'Last Updated:\n${currentValue}')
         }
-        valueTile("rail1Voltage", "device.rail1Voltage", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
-            state("rail1Voltage", label:'Rail 1 Voltage:\n${currentValue}V', unit: "V")
+        valueTile("firmwareVer", "device.firmwareVer", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("firmwareVer", label:'Firmware:\n${currentValue}')
         }
-        valueTile("rail2Voltage", "device.rail2Voltage", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
-            state("rail2Voltage", label:'Rail 2 Voltage:\n${currentValue}V', unit: "V")
+        valueTile("phase1Voltage", "device.phase1Voltage", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("phase1Voltage", label:'Phase 1:\n${currentValue}V', unit: "V")
         }
-        
+        valueTile("phase2Voltage", "device.phase2Voltage", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("phase2Voltage", label:'Phase 2:\n${currentValue}V', unit: "V")
+        }
         valueTile("cycleHz", "device.cycleHz", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
             state("cycleHz", label:'Cycle Hz:\n${currentValue}hz', unit: "HZ")
         }
@@ -95,7 +96,7 @@ metadata {
             state("detectionsPending", label:'Pending Device Detections:\n${currentValue}')
         }
         main(["power"])
-        details(["genericMulti", "firmwareVer",  "dtCreated", "rail1Voltage","rail2Voltage", "cycleHz", "wifi_ssid", "wifi_signal", "networkDetection", "detectionsPending"])
+        details(["genericMulti", "dtCreated", "phase1Voltage","phase2Voltage", "cycleHz", "wifi_ssid", "wifi_signal", "networkDetection", "detectionsPending", "firmwareVer"])
     }
 }
 
@@ -136,27 +137,34 @@ def getShortDevName(){
 def updateDeviceStatus(Map senseDevice){
     String devName = getShortDevName()
 
-    // senseDevice?.monitorData?.each { k,v ->
-    //     log.debug "$k: $v"
-    // }
+    senseDevice?.monitorData?.each { k,v ->
+        log.debug "$k: $v"
+    }
     Float currentPower = senseDevice?.usage?.isNumber() ? senseDevice?.usage as Float : 0.0
     Float oldPower = device.currentState("power")?.floatValue ?: -1
-
-    // log.debug "usage: ${senseDevice?.usage} | currentPower: $currentPower | oldPower: ${oldPower}"
-    String firmwareVer = senseDevice?.version ?: "Not Set"
-    if(isStateChange(device, "firmwareVer", firmwareVer?.toString())) {
-        sendEvent(name: "firmwareVer", value: firmwareVer?.toString(), display: true, displayed: true)
+    if (oldPower != currentPower) {
+        def usageChange = (currentPower - oldPower).abs()
+        if (isStateChange(device, "power", currentPower?.toString())) {
+            log.debug "Updating usage from $oldPower to $currentPower"
+            sendEvent(name: "power", value: currentPower, units: "W", display: true, displayed: true, isStateChange: true)
+        }
     }
+    // log.debug "usage: ${senseDevice?.usage} | currentPower: $currentPower | oldPower: ${oldPower}"
+    
     if(senseDevice?.monitorData) {
+        String firmwareVer = senseDevice?.monitorData?.version ?: "Not Set"
+        if(isStateChange(device, "firmwareVer", firmwareVer?.toString())) {
+            sendEvent(name: "firmwareVer", value: firmwareVer?.toString(), display: true, displayed: true)
+        }
         log.debug "voltage: ${senseDevice?.monitorData?.voltage}"
-        String volt1 = senseDevice?.monitorData?.voltage[0] ?: "Not Set"
-        if(isStateChange(device, "rail1Voltage", volt1?.toString())) {
-            sendEvent(name: "rail1Voltage", value: volt1?.toString(), display: true, displayed: true)
+        String volt1 = senseDevice?.monitorData?.voltage && senseDevice?.monitorData?.voltage[0] ? senseDevice?.monitorData?.voltage[0] : "Not Set"
+        if(isStateChange(device, "phase1Voltage", volt1?.toString())) {
+            sendEvent(name: "phase1Voltage", value: volt1?.toString(), display: true, displayed: true)
         }
 
-        String volt2 = senseDevice?.monitorData?.voltage[1] ?: "Not Set"
-        if(isStateChange(device, "rail2Voltage", volt2?.toString())) {
-            sendEvent(name: "rail2Voltage", value: volt2?.toString(), display: true, displayed: true)
+        String volt2 = senseDevice?.monitorData?.voltage && senseDevice?.monitorData?.voltage[1] ? senseDevice?.monitorData?.voltage[1] : "Not Set"
+        if(isStateChange(device, "phase2Voltage", volt2?.toString())) {
+            sendEvent(name: "phase2Voltage", value: volt2?.toString(), display: true, displayed: true)
         }
         String hz = senseDevice?.monitorData?.hz ?: "Not Set"
         if(isStateChange(device, "cycleHz", hz?.toString())) {
@@ -176,17 +184,9 @@ def updateDeviceStatus(Map senseDevice){
         }
 
         String pending = (senseDevice?.monitorData?.detectionsPending?.size()) ? senseDevice?.monitorData?.detectionsPending?.collect { "${it?.name} (${it?.progress}%)"}?.join("\n") : "Nothing Pending..."
-        log.debug "pending: $pending"
+        // log.debug "pending: $pending"
         if(isStateChange(device, "detectionsPending", pending?.toString())) {
             sendEvent(name: "detectionsPending", value: pending?.toString(), display: true, displayed: true)
-        }
-    }
-    
-    if (oldPower != currentPower) {
-        def usageChange = (currentPower - oldPower).abs()
-        if (isStateChange(device, "power", currentPower?.toString())) {
-            log.debug "Updating usage from $oldPower to $currentPower"
-            sendEvent(name: "power", value: currentPower, units: "W", display: true, displayed: true, isStateChange: true)
         }
     }
     setOnlineStatus((senseDevice?.monitorData?.online != false))

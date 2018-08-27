@@ -1,13 +1,16 @@
 {
     "versions": {
         "mainApp": {
-            "ver": "0.2.0"
+            "ver": "0.2.1"
         },
         "monitorDevice": {
-            "ver": "0.2.0"
+            "ver": "0.2.1"
         },
         "energyDevice": {
             "ver": "0.2.0"
+        },
+        "server": {
+            "ver": "0.2.1"
         }
     }
 }
