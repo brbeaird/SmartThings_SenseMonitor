@@ -47,8 +47,8 @@ metadata {
     tiles (scale: 2) {
         multiAttributeTile(name:"genericMulti", type:"generic", width:6, height:4) {
             tileAttribute("device.switch", key: "PRIMARY_CONTROL") {
-                attributeState "off", label: '${currentValue}', icon: "st.switches.switch.off", backgroundColor: "#ffffff"
                 attributeState "on", label: '${currentValue}', icon: "st.switches.switch.on", backgroundColor: "#00a0dc"
+                attributeState "off", label: '${currentValue}', icon: "st.switches.switch.off", backgroundColor: "#ffffff"
             }
             tileAttribute("device.power", key: "SECONDARY_CONTROL") {
                 attributeState "power", label: '${currentValue}W', unit: "W",
@@ -72,25 +72,25 @@ metadata {
             state("default", label:'')
         }
         valueTile("lastUpdated", "device.lastUpdated", height: 1, width: 3, inactiveLabel: false, decoration: "flat") {
-            state("lastUpdated", label:'Last Updated: ${currentValue}')
+            state("lastUpdated", label:'Last Updated:\n${currentValue}')
         }
         valueTile("deviceLocation", "device.deviceLocation", height: 1, width: 3, inactiveLabel: false, decoration: "flat") {
             state("deviceLocation", label:'Device Location:\n${currentValue}')
         }
         valueTile("dtCreated", "device.dtCreated", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
-            state("dtCreated", label:'Device Created: ${currentValue}')
+            state("dtCreated", label:'Device Created:\n${currentValue}')
         }
         valueTile("deviceMake", "device.deviceMake", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
-            state("deviceMake", label:'Device Make: ${currentValue}')
+            state("deviceMake", label:'Device Make:\n${currentValue}')
         }
         valueTile("deviceModel", "device.deviceModel", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
-            state("deviceModel", label:'Device Model: ${currentValue}')
+            state("deviceModel", label:'Device Model:\n${currentValue}')
         }
         valueTile("detectionMature", "device.detectionMature", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
-            state("detectionMature", label:'Mature Detection: ${currentValue}')
+            state("detectionMature", label:'Mature Detection:\n${currentValue}')
         }
         valueTile("deviceRevoked", "device.deviceRevoked", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
-            state("deviceRevoked", label:'Device Revoked: ${currentValue}')
+            state("deviceRevoked", label:'Device Revoked:\n${currentValue}')
         }
         main(["power"])
         details(["genericMulti", "lastUpdated", "deviceLocation", "dtCreated", "deviceMake", "deviceModel", "detectionMature", "deviceRevoked"])
@@ -114,9 +114,6 @@ def initialize() {
  	sendEvent(name: "DeviceWatch-DeviceStatus", value: "online")
 	sendEvent(name: "DeviceWatch-Enroll", value: [protocol: "cloud", scheme:"untracked"].encodeAsJson(), displayed: false)
 }
-
-
-
 
 //For testing only
 /*
@@ -196,10 +193,6 @@ def getShortDevName(){
 def updateDeviceStatus(Map senseDevice){
     String devName = getShortDevName()
     String oldStatus = device.currentValue("switch")
-    // senseDevice?.each { k,v->
-    //     log.debug "${k}: ${v}"
-    // }
-    
     //log.debug "Old status was " + oldStatus
     //log.debug "New status is: " + senseDevice.state
 
@@ -249,21 +242,24 @@ def updateDeviceStatus(Map senseDevice){
 
     Float currentPower = senseDevice?.usage?.isNumber() ? senseDevice?.usage as Float : 0.0
     Float oldPower = device.currentState("power")?.floatValue ?: -1
+
+    // log.debug "usage: ${senseDevice?.usage} | currentPower: $currentPower | oldPower: ${oldPower}"
     
     if(senseDevice?.id == "SenseMonitor") {
         senseDevice?.location = "Electrical Panel"
         senseDevice?.make = "Sense"
         senseDevice?.model = "Monitor"
+        senseDevice?.revoked = false
+        senseDevice?.mature = true
     }
 
     if(senseDevice?.containsKey("dateCreated")) {
-        def dtCreated = senseDevice?.dateCreated ? parseDt(senseDevice?.dateCreated, "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'") : (state?.dateCreated ?: "")
+        def dtCreated = senseDevice?.dateCreated ? formatDt(parseDt(senseDevice?.dateCreated, "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")) : (state?.dateCreated ?: "")
         if(isStateChange(device, "dtCreated", dtCreated as String)) {
             sendEvent(name: "dtCreated", value: dtCreated as String, display: true, displayed: true)
         }
     }
 
-    
     String loc = senseDevice?.location ?: "Not Set"
     if(isStateChange(device, "deviceLocation", loc?.toString())) {
         sendEvent(name: "deviceLocation", value: loc?.toString(), display: true, displayed: true)
@@ -299,13 +295,13 @@ def updateDeviceStatus(Map senseDevice){
 
     //Decide if we should update the usage
     // log.debug "currentPower: ${currentPower} | oldPower: ${oldPower}"
-    if (oldPower && currentPower && oldPower != currentPower){
+    if (oldPower != currentPower) {
         Boolean isUsageChange = true
         def usageChange = (currentPower - oldPower).abs()
         if (devName == "Other" && usageChange < 30 && currentPower != 0) { isUsageChange = false }
         if (devName == "TotalUsage" && usageChange < 50 && currentPower != 0) { isUsageChange = false }
 
-        if (isUsageChange){
+        if (isStateChange(device, "power", currentPower?.toString())) {
             log.debug "Updating usage from $oldPower to $currentPower"
             sendEvent(name: "power", value: currentPower, units: "W", display: true, displayed: true, isStateChange: true)
         }
@@ -327,7 +323,7 @@ Boolean ok2Notify() {
 }
 
 def updateDeviceLastRefresh(){
-    def finalString = new Date().format('MM/d/yyyy hh:mm',location.timeZone)
+    def finalString = new Date().format('MM/d/yyyy hh:mm a',location.timeZone)
     sendEvent(name: "lastUpdated", value: finalString, display: false , displayed: false)
 }
 

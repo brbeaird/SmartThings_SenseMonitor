@@ -39,7 +39,6 @@ definition(
 preferences {
     // page(name: "prefConfigure", title: "Sense")
 	page(name: "mainPage")
-	page(name: "prefsPage")
 	page(name: "debugPrefPage")
 	page(name: "notifPrefPage")
 	page(name: "setNotificationTimePage")
@@ -56,50 +55,32 @@ def appInfoSect(sect=true)	{
 	def str = ""
     str += "${app?.name}"
     str += "\nAuthor: ${appAuthor()}"
-    str += "\nVersion: ${state.thisSmartAppVersion}"
+    str += "\nVersion: ${appVersion()}"
     section() { paragraph str, image: getAppImg("sense.2x.png") }
-}
-
-def prefConfigure() {
-    checkVersionData(true)
-    state.previousVersion = state.thisSmartAppVersion
-    if (state.previousVersion == null){
-        state.previousVersion = 0;
-    }
-    state.thisSmartAppVersion = "0.1.0"
-    getVersionInfo(0, 0)
-
-    return dynamicPage(name: "prefConfigure", title: "Configure Sense Devices", uninstall:true, install: true) {
-        appInfoSect()
-        section("Discovered Devices:") {
-            List devs = getDeviceList()?.collect { "${it?.value?.name} (${it?.value?.usage ?: 0} W)" }?.sort()
-            paragraph "${devs?.size() ? devs?.join("\n") : "No Devices Available"}"
-        }
-        section("Notification Filters:") {
-            input "quietModes", "mode", title: "Don't Notify in These Modes!", multiple: true, submitOnChange: true
-        }
-    }
 }
 
 def mainPage() {
     checkVersionData(true)
+    // state.previousVersion = state.thisSmartAppVersion
+    // if (state.previousVersion == null){
+    //     state.previousVersion = 0;
+    // }
+    // state.thisSmartAppVersion = "0.1.0"
+    // getVersionInfo(0, 0)
 	dynamicPage(name: "mainPage", uninstall: false, install: true) {
         appInfoSect()
-        section("Discovered Devices:") {
+        section("Sense Devices:") {
             List devs = getDeviceList()?.collect { "${it?.value?.name} (${it?.value?.usage ?: 0} W)" }?.sort()
-            paragraph "${devs?.size() ? devs?.join("\n") : "No Devices Available"}"
+            paragraph title: "Discovered Devices:", "${devs?.size() ? devs?.join("\n") : "No Devices Available"}"
+            input "senseDeviceFilter", "enum", title: "Only Create/Update these Devices", description: "Tap to select", options: (getDeviceList(true)?:[]), multiple: true, required: false, submitOnChange: true, image: getAppImg("power.png")
         }
         section("Notifications:") {
             def t0 = getAppNotifConfDesc()
-            href "notifPrefPage", title: "Notifications", description: (t0 ? "${t0}\n\nTap to modify" : "Tap to configure"), state: (t0 ? "complete" : null), image: getAppImg("notification_icon2.png")
+            href "notifPrefPage", title: "App and Device\nNotifications", description: (t0 ? "${t0}\n\nTap to modify" : "Tap to configure"), state: (t0 ? "complete" : null), image: getAppImg("notification_icon2.png")
         }
-        section("Currency and Logging:") {
-            def descStr = ""
-            def sz = descStr.size()
-            descStr += getAppDebugDesc() ?: ""
-            if(descStr.size() != sz) { descStr += "\n"; sz = descStr.size() }
-            def prefDesc = (descStr != "") ? "${descStr}Tap to Modify..." : "Tap to Configure..."
-            href "prefsPage", title: "Preferences", description: prefDesc, state: (descStr ? "complete" : ""), image: getAppImg("settings_icon.png")
+        section("Logging:") {
+            def dbgDesc = getAppDebugDesc()
+            href "debugPrefPage", title: "Logging", description: (dbgDesc ? "${dbgDesc ?: ""}\n\nTap to modify..." : "Tap to configure..."), state: ((isAppDebug() || isChildDebug()) ? "complete" : null), image: getAppImg("log.png")
         }
         section("") {
             href "uninstallPage", title: "Uninstall this App", description: "Tap to Remove...", image: getAppImg("uninstall_icon.png")
@@ -109,7 +90,7 @@ def mainPage() {
 
 Map getDeviceList(isInputEnum=false, hideDefaults=true) {
     Map devMap = [:]
-    Map availDevs = atomicState?.senseDeviceMap ?: [:]
+    Map availDevs = state?.senseDeviceMap ?: [:]
     availDevs?.each { key, val->
         if(hideDefaults) { 
             if(!(key?.toString() in ["TotalUsage", "unknown", "SenseMonitor", "always_on"])) {
@@ -124,27 +105,26 @@ def debugPrefPage() {
 	dynamicPage(name: "debugPrefPage", install: false) {
 		section ("Application Logs") {
 			input (name: "appDebug", type: "bool", title: "Show App Logs in the IDE?", required: false, defaultValue: false, submitOnChange: true, image: getAppImg("log.png"))
-			if (settings?.appDebug) {
-				LogAction("Debug Logs are Enabled...", "info", false)
-			} else { LogAction("Debug Logs are Disabled...", "info", false) }
 		}
 		section ("Child Device Logs") {
 			input (name: "childDebug", type: "bool", title: "Show Device Logs in the IDE?", required: false, defaultValue: false, submitOnChange: true, image: getAppImg("log.png"))
-			if (settings?.childDebug) { LogAction("Device Debug Logs are Enabled...", "info", false) 
-			} else { LogAction("Device Debug Logs are Disabled...", "info", false) }
 		}
 	}
 }
 
 def notifPrefPage() {
 	dynamicPage(name: "notifPrefPage", install: false) {
-		section("Enable Text Messaging:") {
-			input "phones", "phone", title: "Send SMS to Number\n(Optional)", required: false, submitOnChange: true, image: getAppImg("notification_icon2.png")
-		}
+        Integer pollWait = 900
+        Integer pollMsgWait = 3600
+        Integer updNotifyWait = 7200
+
 		section("Enable Push Messages:") {
 			input "usePush", "bool", title: "Send Push Notitifications\n(Optional)", required: false, submitOnChange: true, defaultValue: false, image: getAppImg("notification_icon.png")
 		}
-		section("Enable Pushover Support:") {
+		section("Enable Text Messaging:") {
+			input "phones", "phone", title: "Send SMS to Number\n(Optional)", required: false, submitOnChange: true, image: getAppImg("notification_icon2.png")
+		}
+        section("Enable Pushover Support:") {
 			input ("pushoverEnabled", "bool", title: "Use Pushover Integration", required: false, submitOnChange: true, image: getAppImg("pushover_icon.png"))
 			if(settings?.pushoverEnabled == true) {
 				if(state?.isInstalled) {
@@ -155,7 +135,7 @@ def notifPrefPage() {
 						input "pushoverDevices", "enum", title: "Select Pushover Devices", description: "Tap to select", groupedOptions: getPushoverDevices(), multiple: true, required: false, submitOnChange: true
 						if(settings?.pushoverDevices) {
 							def t0 = [(-2):"Lowest", (-1):"Low", 0:"Normal", 1:"High", 2:"Emergency"]
-							input "pushoverPriority", "enum", title: "Notification Priority (Optional)", description: "Tap to select", defaultValue: 0, required: false, multiple: false, submitOnChange: true, options: t0
+							input "pushoverPriority", "enum", title: "Notification Priority (Optional)", description: "Tap to select", defaultValue: "Normal", required: false, multiple: false, submitOnChange: true, options: t0
 							input "pushoverSound", "enum", title: "Notification Sound (Optional)", description: "Tap to select", defaultValue: "pushover", required: false, multiple: false, submitOnChange: true, options: getPushoverSounds()
 						}
 					}
@@ -164,7 +144,7 @@ def notifPrefPage() {
 		}
 		if(settings?.phone || settings?.usePush || (settings?.pushoverEnabled && settings?.pushoverDevices)) {
 			if((settings?.usePush || (settings?.pushoverEnabled && settings?.pushoverDevices)) && !state?.pushTested && state?.pushoverManager) {
-				if(sendMsgNew("Info", "Push Notification Test Successful. Notifications Enabled for ${app?.label}", true)) {
+				if(sendMsg("Info", "Push Notification Test Successful. Notifications Enabled for ${app?.label}", true)) {
 					state.pushTested = true
 				}
 			}
@@ -172,46 +152,45 @@ def notifPrefPage() {
 				def t1 = getNotifSchedDesc()
 				href "setNotificationTimePage", title: "Notification Restrictions", description: (t1 ?: "Tap to configure"), state: (t1 ? "complete" : null), image: getAppImg("restriction_icon.png")
 			}
-
 			section("Missed Poll Alerts:") {
-				input (name: "sendMissedPollMsg", type: "bool", title: "Send Missed Poll Messages?", defaultValue: true, submitOnChange: true, image: getAppImg("late_icon.png"))
-				if(sendMissedPollMsg == null || sendMissedPollMsg) {
-					def misPollNotifyWaitValDesc = !misPollNotifyWaitVal ? "Default: 15 Minutes" : misPollNotifyWaitVal
-					input (name: "misPollNotifyWaitVal", type: "enum", title: "Time Past the missed Poll?", required: false, defaultValue: 900, metadata: [values:notifValEnum()], submitOnChange: true)
-					if(misPollNotifyWaitVal) {
-						state.misPollNotifyWaitVal = !misPollNotifyWaitVal ? 900 : misPollNotifyWaitVal.toInteger()
-						if (misPollNotifyWaitVal.toInteger() == 1000000) {
-							input (name: "misPollNotifyWaitValCust", type: "number", title: "Custom Missed Poll Value in Seconds", range: "60..86400", required: false, defaultValue: 900, submitOnChange: true)
-							if(misPollNotifyWaitValCust) { state?.misPollNotifyWaitVal = misPollNotifyWaitValCust ? misPollNotifyWaitValCust.toInteger() : 900 }
+				input (name: "sendMissedPollMsg", type: "bool", title: "Send Missed Checkin Alerts?", defaultValue: true, submitOnChange: true, image: getAppImg("late_icon.png"))
+				if(settings?.sendMissedPollMsg) {
+					def misPollNotifyWaitValDesc = settings?.misPollNotifyWaitVal ?: "Default: 15 Minutes"
+					input (name: "misPollNotifyWaitVal", type: "enum", title: "Time Past the Missed Checkin?", required: false, defaultValue: 900, metadata: [values:notifValEnum()], submitOnChange: true)
+					if(settings?.misPollNotifyWaitVal) {
+						if (settings?.misPollNotifyWaitVal.toInteger() == 1000000) {
+							input (name: "misPollNotifyWaitValCust", type: "number", title: "Custom Missed Checkin Value in Seconds", range: "60..86400", required: false, defaultValue: 900, submitOnChange: true)
+							if(settings?.misPollNotifyWaitValCust) { pollWait = settings?.misPollNotifyWaitValCust }
 						}
-					} else { state.misPollNotifyWaitVal = !misPollNotifyWaitVal ? 900 : misPollNotifyWaitVal.toInteger() }
+					}
 
-					def misPollNotifyMsgWaitValDesc = !misPollNotifyMsgWaitVal ? "Default: 1 Hour" : misPollNotifyMsgWaitVal
+					def misPollNotifyMsgWaitValDesc = settings?.misPollNotifyMsgWaitVal ?: "Default: 1 Hour"
 					input (name: "misPollNotifyMsgWaitVal", type: "enum", title: "Delay before sending again?", required: false, defaultValue: 3600, metadata: [values:notifValEnum()], submitOnChange: true)
-					if(misPollNotifyMsgWaitVal) {
-						state.misPollNotifyMsgWaitVal = !misPollNotifyMsgWaitVal ? 3600 : misPollNotifyMsgWaitVal.toInteger()
-						if (misPollNotifyMsgWaitVal.toInteger() == 1000000) {
+					if(settings?.misPollNotifyMsgWaitVal) {
+						if (settings?.misPollNotifyMsgWaitVal.toInteger() == 1000000) {
 							input (name: "misPollNotifyMsgWaitValCust", type: "number", title: "Custom Msg Wait Value in Seconds", range: "60..86400", required: false, defaultValue: 3600, submitOnChange: true)
-							if(misPollNotifyMsgWaitValCust) { state.misPollNotifyMsgWaitVal = misPollNotifyMsgWaitValCust ? misPollNotifyMsgWaitValCust.toInteger() : 3600 }
+							if(settings?.misPollNotifyMsgWaitValCust) { pollMsgWait = settings?.misPollNotifyMsgWaitValCust }
 						}
-					} else { state.misPollNotifyMsgWaitVal = !misPollNotifyMsgWaitVal ? 3600 : misPollNotifyMsgWaitVal.toInteger() }
+					}
 				}
 			}
 			section("Code Update Alerts:") {
 				input (name: "sendAppUpdateMsg", type: "bool", title: "Send for Updates...", defaultValue: true, submitOnChange: true, image: getAppImg("update_icon.png"))
-				if(sendMissedPollMsg == null || sendAppUpdateMsg) {
-					def updNotifyWaitValDesc = !updNotifyWaitVal ? "Default: 2 Hours" : updNotifyWaitVal
+				if(settings?.sendAppUpdateMsg) {
+					def updNotifyWaitValDesc = settings?.updNotifyWaitVal ?: "Default: 2 Hours"
 					input (name: "updNotifyWaitVal", type: "enum", title: "Send reminders every?", required: false, defaultValue: 7200, metadata: [values:notifValEnum()], submitOnChange: true)
-					if(updNotifyWaitVal) {
-						state.updNotifyWaitVal = !updNotifyWaitVal ? 7200 : updNotifyWaitVal.toInteger()
-						if (updNotifyWaitVal.toInteger() == 1000000) {
+					if(settings?.updNotifyWaitVal) {
+						if (settings?.updNotifyWaitVal.toInteger() == 1000000) {
 							input (name: "updNotifyWaitValCust", type: "number", title: "Custom Missed Poll Value in Seconds", range: "30..86400", required: false, defaultValue: 7200, submitOnChange: true)
-							if(updNotifyWaitValCust) { state.updNotifyWaitVal = updNotifyWaitValCust ? updNotifyWaitValCust.toInteger() : 7200 }
+							if(settings?.updNotifyWaitValCust) { updNotifyWait = settings?.updNotifyWaitValCust }
 						}
-					} else { state.updNotifyWaitVal = !updNotifyWaitVal ? 7200 : updNotifyWaitVal.toInteger() }
+					}
 				}
 			}
 		} else { state.pushTested = false }
+        state.misPollNotifyWaitVal = pollWait
+        state.misPollNotifyMsgWaitVal = pollMsgWait
+        state.updNotifyWaitVal = updNotifyWait
 	}
 }
 
@@ -251,75 +230,6 @@ def uninstallPage() {
 	}
 }
 
-def getAppNotifConfDesc() {
-	def str = ""
-	if(pushStatus()) {
-		def ap = getAppNotifDesc()
-		def nd = getNotifSchedDesc()
-		str += (settings?.usePush) ? "${str != "" ? "\n" : ""}Sending via: (Push)" : ""
-		str += (settings?.pushoverEnabled) ? "${str != "" ? "\n" : ""}Pushover: (Enabled)" : ""
-		str += (settings?.pushoverEnabled && settings?.pushoverPriority) ? "${str != "" ? "\n" : ""} • Priority: (${settings?.pushoverPriority})" : ""
-		str += (settings?.pushoverEnabled && settings?.pushoverSound) ? "${str != "" ? "\n" : ""} • Sound: (${settings?.pushoverSound})" : ""
-		str += (settings?.phone) ? "${str != "" ? "\n" : ""}Sending via: (SMS)" : ""
-		str += (ap != null) ? "${str != "" ? "\n" : ""}\nEnabled Alerts:\n${ap}" : ""
-		str += (nd != null) ? "${str != "" ? "\n" : ""}\nAlert Restrictions:\n${nd}" : ""
-	}
-	return str != "" ? str : null
-}
-
-def getAppNotifDesc() {
-	def str = ""
-	str += settings?.sendMissedPollMsg != false ? "${str != "" ? "\n" : ""} • Missed Poll Alerts: (${strCapitalize(settings?.sendMissedPollMsg ?: "True")})" : ""
-	str += settings?.sendAppUpdateMsg != false ? "${str != "" ? "\n" : ""} • Code Updates: (${strCapitalize(settings?.sendAppUpdateMsg ?: "True")})" : ""
-	return str != "" ? str : null
-}
-
-def getInputToStringDesc(inpt, addSpace = null) {
-	Integer cnt = 0
-	String str = ""
-	if(inpt) {
-		inpt.sort().each { item ->
-			cnt = cnt+1
-			str += item ? (((cnt < 1) || (inpt?.size() > 1)) ? "\n      ${item}" : "${addSpace ? "      " : ""}${item}") : ""
-		}
-	}
-	//log.debug "str: $str"
-	return (str != "") ? "${str}" : null
-}
-
-String getNotifSchedDesc() {
-	def sun = getSunriseAndSunset()
-	def startInput = settings?.qStartInput
-	def startTime = settings?.qStartTime
-	def stopInput = settings?.qStopInput
-	def stopTime = settings?.qStopTime
-	def dayInput = settings?.quietDays
-	def modeInput = settings?.quietModes
-	def notifDesc = ""
-	def getNotifTimeStartLbl = ( (startInput == "Sunrise" || startInput == "Sunset") ? ( (startInput == "Sunset") ? epochToTime(sun?.sunset.time) : epochToTime(sun?.sunrise.time) ) : (startTime ? time2Str(startTime) : "") )
-	def getNotifTimeStopLbl = ( (stopInput == "Sunrise" || stopInput == "Sunset") ? ( (stopInput == "Sunset") ? epochToTime(sun?.sunset.time) : epochToTime(sun?.sunrise.time) ) : (stopTime ? time2Str(stopTime) : "") )
-	notifDesc += (getNotifTimeStartLbl && getNotifTimeStopLbl) ? " • Silent Time: ${getNotifTimeStartLbl} - ${getNotifTimeStopLbl}" : ""
-	def days = getInputToStringDesc(dayInput)
-	def modes = getInputToStringDesc(modeInput)
-	notifDesc += days ? "${(getNotifTimeStartLbl || getNotifTimeStopLbl) ? "\n" : ""} • Silent Day${isPluralString(dayInput)}: ${days}" : ""
-	notifDesc += modes ? "${(getNotifTimeStartLbl || getNotifTimeStopLbl || days) ? "\n" : ""} • Silent Mode${isPluralString(modeInput)}: ${modes}" : ""
-	return (notifDesc != "") ? "${notifDesc}" : null
-}
-
-
-def debugStatus() { return !settings?.appDebug ? "Off" : "On" }
-def deviceDebugStatus() { return !settings?.childDebug ? "Off" : "On" }
-def isAppDebug() { return !settings?.appDebug ? false : true }
-def isChildDebug() { return !settings?.childDebug ? false : true }
-
-String getAppDebugDesc() {
-	def str = ""
-	str += isAppDebug() ? "App Debug: (${debugStatus()})" : ""
-	str += isChildDebug() && str != "" ? "\n" : ""
-	str += isChildDebug() ? "Device Debug: (${deviceDebugStatus()})" : ""
-	return (str != "") ? "${str}" : null
-}
-
 def installed() {
     log.debug "Installed with settings: ${settings}"
     state?.isInstalled = true
@@ -327,8 +237,8 @@ def installed() {
 }
 
 def updated() {
-    if (state.previousVersion != state.thisSmartAppVersion){
-        getVersionInfo(state.previousVersion, state.thisSmartAppVersion);
+    if (state?.previousVersion != state?.thisSmartAppVersion){
+        getVersionInfo(state?.previousVersion, state?.thisSmartAppVersion);
     }
     state?.isInstalled = true
     unsubscribe()
@@ -342,7 +252,32 @@ def uninstalled() {
 def initialize() {
     // listen to LAN incoming messages
     runEvery5Minutes("notificationCheck")
+    subscribe(app, onAppTouch)
     subscribe(location, null, lanEventHandler, [filterEvents:false])
+    stateCleanup()
+    updCodeVerMap()
+}
+
+private stateCleanup() {
+    List items = ["availableDevices"]
+    items?.each { si-> if(state?.containsKey(si as String)) { state?.remove(si)} }
+}
+
+def onAppTouch(evt) {
+    log.trace "appTouch..."
+	notificationCheck()
+}
+
+private updCodeVerMap() {
+    Map cv = state?.codeVersions ?: [:]
+    cv["mainApp"] = appVersion()
+    state?.codeVersions = cv
+}
+
+private modCodeVerMap(key, val) {
+    Map cv = state?.codeVersions ?: [:]
+    cv["$key"] = val
+    state?.codeVersions = cv
 }
 
 def lanEventHandler(evt) {
@@ -355,10 +290,14 @@ def lanEventHandler(evt) {
 
     //Filter out calls from other LAN devices
     if (headerMap != null){
-        if (headerMap?.source != "STSense" || (headerMap?.senseAppId != null && headerMap?.senseAppId != app?.getId())) {
-            //log.debug "Non-sense data detected - ignoring."
+        if (headerMap?.source != "STSense") {
+            // log.debug "Non-sense data detected - ignoring."
             return 0
         }
+        if (headerMap?.source == "STSense" && headerMap?.senseAppId && headerMap?.senseAppId?.toString() != app?.getId()) { 
+            log.warn "STSense Data Recieved but it was meant for a different SmartAppId..."
+            return 0
+        } 
     }
 
     Map result = [:]
@@ -381,15 +320,16 @@ def lanEventHandler(evt) {
         If "do not rename" preference, do not rename child
         */
 
-        if (result.devices){
+        if (result?.devices){
             //log.debug result.versionInfo.SmartApp
             Map senseDeviceMap = [:]
-            result.devices.each { senseDevice ->
+            result?.devices?.each { senseDevice ->
                 senseDeviceMap[senseDevice?.id] = senseDevice
                 // log.debug "senseDevice(${senseDevice.name}): ${senseDevice}"
+                log.debug "${senseDevice.name} | State: (${senseDevice?.state?.toString().toUpperCase()}) | Usage: ${senseDevice?.usage}W"
                 
                 //def senseDevice = result.devices[0]
-                def dni = [ app.id, (senseDevice != "SenseMonitor" ? "senseDevice" : "senseMonitor"), senseDevice.id].join('|')
+                def dni = [ app?.id, (senseDevice != "SenseMonitor" ? "senseDevice" : "senseMonitor"), senseDevice?.id].join('|')
                 //log.debug "device DNI will be: " + dni + " for " + senseDevice.name
                 def childDevice = getChildDevice(dni)
                 def childDeviceAttrib = [:]
@@ -400,42 +340,161 @@ def lanEventHandler(evt) {
                     childDeviceAttrib = ["name": fullName, "completedSetup": true]
 
                     try{ 
-                        if(senseDevice.id == "SenseMonitor") {
+                        if(senseDevice?.id == "SenseMonitor") {
                             log.debug "Creating NEW Sense Monitor Device: " + fullName
                         } else { log.debug "Creating NEW Sense Device: " + fullName }
                         childDevice = addChildDevice("brbeaird", "Sense Monitor Device", dni, null, childDeviceAttrib)
-                        childDevice.updateDeviceStatus(senseDevice)
+                        childDevice?.updateDeviceStatus(senseDevice)
                     } catch(physicalgraph.app.exception.UnknownDeviceTypeException e) {
                         log.error "AddDevice Error! ", e
                         //state.installMsg = state.installMsg + deviceName + ": problem creating RM device. Check your IDE to make sure the brbeaird : RainMachine device handler is installed and published. \r\n\r\n"
                     }
                 } else {
                     //Check and see if name needs a refresh
-                    if (childDevice.name != fullName || childDevice.label != fullName){
-                        log.debug ("Updating device name (old label was " + childDevice.label + " old name was " + childDevice.name + " new hotness: " + fullName)
-                        childDevice.name = fullName
-                        childDevice.label = fullName
+                    if (childDevice?.name != fullName || childDevice?.label != fullName){
+                        log.debug ("Updating device name (old label was " + childDevice?.label + " old name was " + childDevice?.name + " new hotness: " + fullName)
+                        childDevice?.name = fullName
+                        childDevice?.label = fullName
                         //state.installMsg = state.installMsg + deviceName + ": updating device name (old name was " + childDevice.label + ") \r\n\r\n"
                     }
-                    state?.senseDeviceVersion = childDevice?.devVersion() // Used for the Updater Notifiers
+                    modCodeVerMap("senseDevice", childDevice?.devVersion()) // Used for the Updater Notifiers
                     
-                    childDevice.updateDeviceStatus(senseDevice)
+                    childDevice?.updateDeviceStatus(senseDevice)
                 }
-                atomicState?.lastDevDataUpd = getDtNow()
+                state?.lastDevDataUpd = getDtNow()
             }
-            atomicState?.senseDeviceMap = senseDeviceMap
+            state?.senseDeviceMap = senseDeviceMap
         }
     }
 }
 
-def checkVersionData(now = false) {
-	//log.trace "checkVersionData..."
-	if (!state?.versionData || (getLastVerUpdSec() > (3600*6))) {
-		if(now) {
-			getVersionData()
-		} else {
-			if(canSchedule()) { runIn(45, "getVersionData", [overwrite: true]) }  //This reads a JSON file from a web server with timing values and version numbers
+/******************************************
+|    Notification Functions
+*******************************************/
+Map notifValEnum(allowCust = true) {
+	Map items = [
+		60:"1 Minute", 300:"5 Minutes", 600:"10 Minutes", 900:"15 Minutes", 1200:"20 Minutes", 1500:"25 Minutes",
+		1800:"30 Minutes", 3600:"1 Hour", 7200:"2 Hours", 14400:"4 Hours", 21600:"6 Hours", 43200:"12 Hours", 86400:"24 Hours"
+	]
+    if(allowCust) { items[100000] = "Custom" }
+	return items 
+}
+
+private notificationCheck() {
+    // log.trace "notificationCheck"
+    checkVersionData()
+	if(!getOk2Notify()) { return }
+	missPollNotify((settings?.sendMissedPollMsg == true), (state?.misPollNotifyMsgWaitVal ?: 3600))
+	appUpdateNotify()
+}
+
+private missPollNotify(Boolean on, Integer wait) {
+    // log.trace "missPollNotify | on: $on | wait: $wait) | getLastDevicePollSec: ${getLastDevicePollSec()} | misPollNotifyWaitVal: ${state?.misPollNotifyWaitVal} | getLastMisPollMsgSec: ${getLastMisPollMsgSec()}"
+	if(!on || !wait || !(getLastDevicePollSec() > (state?.misPollNotifyWaitVal ?: 900))) { return }
+	if(!(getLastMisPollMsgSec() > wait.toInteger())) { 
+        return 
+    } else {
+		def msg = "\nThe app has not refreshed energy data in the last (${getLastDevicePollSec()}) seconds.\nPlease try refreshing data using device refresh button."
+		log.warn msg.toString().replaceAll("\n", " ")
+		if(sendMsg("${app.name} Data Refresh Issue", msg)) {
+			state?.lastMisPollMsgDt = getDtNow()
 		}
+	}
+}
+
+private appUpdateNotify() {
+	Boolean on = (settings?.sendAppUpdateMsg != false)
+	Boolean appUpd = isAppUpdateAvail()
+	Boolean devUpd = isDevUpdateAvail()
+	if(getLastUpdMsgSec() > state?.updNotifyWaitVal.toInteger()) {
+		if(appUpd || devUpd) {
+			def str = ""
+			str += !appUpd ? "" : "${str == "" ? "" : "\n"}Sense App: v${state?.versionData?.versions?.mainApp?.ver?.toString()}"
+			str += !devUpd ? "" : "${str == "" ? "" : "\n"}Sense Device: v${state?.versionData?.versions?.senseDevice?.ver?.toString()}"
+			sendMsg("Info", "Sense Monitor Update(s) are Available:${str}...\n\nPlease visit the IDE to Update your code...")
+			state?.lastUpdMsgDt = getDtNow()
+		}
+	}
+}
+
+public sendMsg(String msgType, String msg, Boolean showEvt=true, Map pushoverMap=null, sms=null, push=null) {
+	//log.trace("sendMsg:  msgType: ${msgType}, msg: ${msg}, showEvt: ${showEvt}")
+	logger("trace", "sendMsg")
+	def sentstr = "Push"
+	def sent = false
+	try {
+		def newMsg = "${msgType}: ${msg}" as String
+		def flatMsg = newMsg.toString().replaceAll("\n", " ")
+		if(!getOk2Notify()) {
+			log.info "sendMsg: Message Skipped During Quiet Time ($flatMsg)"
+			if(showEvt) { sendNotificationEvent(newMsg) }
+		} else {
+			
+            if(push || settings?.usePush) {
+                sentstr = "Push Message"
+                if(showEvt) {
+                    sendPush(newMsg)	// sends push and notification feed
+                } else {
+                    sendPushMessage(newMsg)	// sends push
+                }
+                sent = true
+            }
+            if(settings?.pushoverEnabled && settings?.pushoverDevices) {
+                sentstr = "Pushover Message"
+                Map msgObj = [:]
+                msgObj = pushoverMap ?: [title: msgType, message: msg, priority: (settings?.pushoverPriority?:0)]
+                if(settings?.pushoverSound) { msgObj?.sound = settings?.pushoverSound }
+                buildPushMessage(settings?.pushoverDevices, msgObj, true)
+                sent = true
+            }
+            def thephone = sms ? sms.toString() : settings?.phone ? settings?.phone?.toString() : ""
+            if(thephone) {
+                sentstr = "Text Message to Phone [${thephone}]"
+                def t0 = newMsg.take(140)
+                if(showEvt) {
+                    sendSms(thephone as String, t0 as String)	// send SMS and notification feed
+                } else {
+                    sendSmsMessage(thephone as String, t0 as String)	// send SMS
+                }
+                sent = true
+            }
+			if(sent) {
+				state?.lastMsg = flatMsg
+				state?.lastMsgDt = getDtNow()
+				logger("debug", "sendMsg: Sent ${sentstr} (${flatMsg})")
+			}
+		}
+	} catch (ex) {
+		log.error "sendMsg $sentstr Exception:", ex
+	}
+	return sent
+}
+
+//PushOver-Manager Input Generation Functions
+private getPushoverSounds(){return (Map) state?.pushoverManager?.sounds?:[:]}
+private getPushoverDevices(){List opts=[];Map pmd=state?.pushoverManager?:[:];pmd?.apps?.each{k,v->if(v&&v?.devices&&v?.appId){Map dm=[:];v?.devices?.sort{}?.each{i->dm["${i}_${v?.appId}"]=i};addInputGrp(opts,v?.appName,dm);}};return opts;}
+private inputOptGrp(List groups,String title){def group=[values:[],order:groups?.size()];group?.title=title?:"";groups<<group;return groups;}
+private addInputValues(List groups,String key,String value){def lg=groups[-1];lg["values"]<<[key:key,value:value,order:lg["values"]?.size()];return groups;}
+private listToMap(List original){original.inject([:]){r,v->r[v]=v;return r;}}
+private addInputGrp(List groups,String title,values){if(values instanceof List){values=listToMap(values)};values.inject(inputOptGrp(groups,title)){r,k,v->return addInputValues(r,k,v)};return groups;}
+private addInputGrp(values){addInputGrp([],null,values)}
+//PushOver-Manager Location Event Subscription Events, Polling, and Handlers
+public pushover_init(){subscribe(location,"pushoverManager",pushover_handler);pushover_poll()}
+public pushover_cleanup(){state?.remove("pushoverManager");unsubscribe("pushoverManager");}
+public pushover_poll(){sendLocationEvent(name:"pushoverManagerCmd",value:"poll",data:[empty:true],isStateChange:true,descriptionText:"Sending Poll Event to Pushover-Manager")}
+public pushover_msg(List devs,Map data){if(devs&&data){sendLocationEvent(name:"pushoverManagerMsg",value:"sendMsg",data:data,isStateChange:true,descriptionText:"Sending Message to Pushover Devices: ${devs}");}}
+public pushover_handler(evt){Map pmd=state?.pushoverManager?:[:];switch(evt?.value){case"refresh":def ed = evt?.jsonData;String id = ed?.appId;Map pA = pmd?.apps?.size() ? pmd?.apps : [:];if(id){pA[id]=pA?."${id}"instanceof Map?pA[id]:[:];pA[id]?.devices=ed?.devices?:[];pA[id]?.appName=ed?.appName;pA[id]?.appId=id;pmd?.apps = pA;};pmd?.sounds=ed?.sounds;break;case "reset":pmd=[:];break;};state?.pushoverManager=pmd;}
+//Builds Map Message object to send to Pushover Manager
+private buildPushMessage(List devices,Map msgData,timeStamp=false){if(!devices||!msgData){return};Map data=[:];data?.appId=app?.getId();data.devices=devices;data?.msgData=msgData;if(timeStamp){data?.msgData?.timeStamp=new Date().getTime()};pushover_msg(devices,data);}
+
+
+private checkVersionData(now = false) { //This reads a JSON file from GitHub with version numbers
+	if (now && !state?.versionData || (getLastVerUpdSec() > (3600*6))) {
+        if(canSchedule()) { 
+            getVersionData(now)
+        } else {
+            runIn(45, "getVersionData", [overwrite: true])
+        }
 	}
 }
 
@@ -448,120 +507,44 @@ Boolean getOk2Notify() { return ((settings?.recipients || settings?.usePush || (
 Integer getLastDevicePollSec() { return !state?.lastDevDataUpd ? 840 : GetTimeDiffSeconds(state?.lastDevDataUpd, "getLastDevicePollSec").toInteger() }
 
 Boolean modesOk(modeEntry) {
-	def res = true
+	Boolean res = true
 	if(modeEntry) {
-		modeEntry?.each { m ->
-			if(m.toString() == location?.mode.toString()) { res = false }
-		}
+		modeEntry?.each { m -> if(m.toString() == location?.mode.toString()) { res = false } }
 	}
 	return res
 }
 
-private notificationCheck() {
-    checkVersionData()
-	if(!getOk2Notify()) { return }
-	missPollNotify(settings?.sendMissedPollMsg, (state?.misPollNotifyMsgWaitVal.toInteger() ?: 3600))
-	appUpdateNotify()
+Boolean notificationTimeOk() {
+    def strtTime = null
+    def stopTime = null
+    def now = new Date()
+    def sun = getSunriseAndSunset() // current based on geofence, previously was: def sun = getSunriseAndSunset(zipCode: zipCode)
+    if(settings?.qStartTime && settings?.qStopTime) {
+        if(settings?.qStartInput == "sunset") { strtTime = sun?.sunset }
+        else if(settings?.qStartInput == "sunrise") { strtTime = sun?.sunrise }
+        else if(settings?.qStartInput == "A specific time" && settings?.qStartTime) { strtTime = settings?.qStartTime }
+
+        if(settings?.qStopInput == "sunset") { stopTime = sun?.sunset }
+        else if(settings?.qStopInput == "sunrise") { stopTime = sun?.sunrise }
+        else if(settings?.qStopInput == "A specific time" && settings?.qStopTime) { stopTime = settings?.qStopTime }
+    } else { return true }
+    if(strtTime && stopTime) {
+        return timeOfDayIsBetween(strtTime, stopTime, new Date(), location.timeZone) ? false : true
+    } else { return true }
 }
 
-private getVersionInfo(oldVersion, newVersion){
-    def params = [
-        uri:  'http://www.fantasyaftermath.com/getVersion/sense/' +  oldVersion + '/' + newVersion,
-        contentType: 'application/json'
-    ]
-    asynchttp_v1.get('responseHandlerMethod', params)
-}
-
-private getVersionData() {
-    def params = [
-        uri:  "https://raw.githubusercontent.com/tonesto7/SmartThings_SenseMonitor/master/resources/versions.json",
-        contentType: 'application/json'
-    ]
-    asynchttp_v1.get('versionDataRespHandler', params)
-}
-
-private versionDataRespHandler(resp, data) {
-    if(resp.hasError()) {
-        log.error "versionDataRespHandler Error: " + resp?.errorMessage
-    } else {
-        if(resp.data) {
-            log.info "Getting Latest Version Data from versions.json File..."
-            state?.versionData = resp?.data
-            state?.lastVerUpdDt = getDtNow()
-        }
-        log.trace ("versionDataRespHandler Resp: ${resp?.data}")
-    }
-}
-
-def responseHandlerMethod(response, data) {
-    if (response.hasError()) {
-        log.error "response has error: $response.errorMessage"
-    } else {
-        def results = response.json
-        state.latestSmartAppVersion = results.SmartApp;
-        state.latestDeviceVersion = results.DoorDevice;
-    }
-
-    log.debug "previousVersion: " + state.previousVersion
-    log.debug "installedVersion: " + state.thisSmartAppVersion
-    log.debug "latestVersion: " + state.latestSmartAppVersion
-    log.debug "deviceVersion: " + state.latestDeviceVersion
+Boolean daysOk(days) {
+	if(days) {
+		def dayFmt = new SimpleDateFormat("EEEE")
+		if(location.timeZone) { dayFmt.setTimeZone(location.timeZone) }
+		return days?.contains(dayFmt.format(new Date())) ? false : true
+	} else { return true }
 }
 
 
-def versionCheck(){
-    state.versionWarning = ""
-    state.thisDeviceVersion = ""
-
-    def childExists = false
-    def childDevs = getChildDevices()
-
-    if (childDevs.size() > 0){
-        childExists = true
-        state.thisDeviceVersion = childDevs[0].showVersion()
-        log.debug "child version found: " + state.thisDeviceVersion
-    }
-
-    log.debug "RM Device Handler Version: " + state.thisDeviceVersion
-
-    if (state.thisSmartAppVersion != state.latestSmartAppVersion) {
-        state.versionWarning = state.versionWarning + "Your SmartApp version (" + state.thisSmartAppVersion + ") is not the latest version (" + state.latestSmartAppVersion + ")\n\n"
-    }
-    if (childExists && state.thisDeviceVersion != state.latestDeviceVersion) {
-        state.versionWarning = state.versionWarning + "Your RainMachine device version (" + state.thisDeviceVersion + ") is not the latest version (" + state.latestDeviceVersion + ")\n\n"
-    }
-
-    log.debug state.versionWarning
-}
-
-private missPollNotify(on, wait) {
-	if(!on || !wait || !(getLastDevicePollSec() > (state?.misPollNotifyWaitVal.toInteger() ?: 900))) { return }
-	def missedPoll = (getLastMisPollMsgSec() > wait.toInteger()) ? true : true
-	if(!on || !wait || !missedPoll) { return }
-	if(on && missedPoll) {
-		def msg = "\nThe app has not refreshed energy data in the last (${getLastDevicePollSec()}) seconds.\nPlease try refreshing data using device refresh button."
-		log.warn msg.toString().replaceAll("\n", " ")
-		if(sendMsg("${app.name} Polling Issue", msg)) {
-			state?.lastMisPollMsgDt = getDtNow()
-		}
-	}
-}
-
-private appUpdateNotify() {
-	def on = settings?.app
-	def appUpd = isAppUpdateAvail()
-	def devUpd = isDevUpdateAvail()
-	if(getLastUpdMsgSec() > state?.updNotifyWaitVal.toInteger()) {
-		if(appUpd || devUpd) {
-			def str = ""
-			str += !appUpd ? "" : "Sense App: v${state?.versionData?.updater?.versions?.mainApp?.ver?.toString()}"
-			str += !devUpd ? "" : "\nMonitor Device: v${state?.versionData?.updater?.versions?.senseDevice?.ver?.toString()}"
-			sendMsg("Info", "Sense Monitor Update(s) are Available:${str}...\n\nPlease visit the IDE to Update your code...")
-			state?.lastUpdMsgDt = getDtNow()
-		}
-	}
-}
-
+/******************************************
+|    APP/DEVICE Version Functions
+*******************************************/
 Boolean isCodeUpdateAvailable(String newVer, String curVer, String type) {
 	Boolean result = false
 	def latestVer
@@ -588,15 +571,93 @@ Boolean isCodeUpdateAvailable(String newVer, String curVer, String type) {
 }
 
 Boolean isAppUpdateAvail() {
-	if(isCodeUpdateAvailable(state?.versionData?.updater?.versions?.mainApp?.ver, appVer(), "manager")) { return true }
+	if(isCodeUpdateAvailable(state?.versionData?.versions?.mainApp?.ver, state?.codeVersions?.mainApp, "manager")) { return true }
 	return false
 }
 
 Boolean isDevUpdateAvail() {
-	if(isCodeUpdateAvailable(state?.versionData?.updater?.versions?.senseDevice?.ver, atomicState?.devVer, "dev")) { return true }
+	if(isCodeUpdateAvailable(state?.versionData?.versions?.senseDevice?.ver, state?.codeVersions?.senseDevice, "dev")) { return true }
 	return false
 }
 
+def versionCheck(){
+    state.versionWarning = ""
+    state.thisDeviceVersion = ""
+
+    def childExists = false
+    def childDevs = getChildDevices()
+
+    if (childDevs.size() > 0){
+        childExists = true
+        state.thisDeviceVersion = childDevs[0].showVersion()
+        logger("debug", "child version found: " + state?.thisDeviceVersion)
+    }
+
+    logger("debug", "RM Device Handler Version: " + state?.thisDeviceVersion)
+
+    if (state.thisSmartAppVersion != state.latestSmartAppVersion) {
+        state.versionWarning = state.versionWarning + "Your SmartApp version (" + state.thisSmartAppVersion + ") is not the latest version (" + state.latestSmartAppVersion + ")\n\n"
+    }
+    if (childExists && state.thisDeviceVersion != state.latestDeviceVersion) {
+        state.versionWarning = state.versionWarning + "Your RainMachine device version (" + state.thisDeviceVersion + ") is not the latest version (" + state.latestDeviceVersion + ")\n\n"
+    }
+
+    log.warn "${state.versionWarning}"
+}
+
+private getVersionInfo(oldVersion, newVersion){
+    def params = [
+        uri:  'http://www.fantasyaftermath.com/getVersion/sense/' +  oldVersion + '/' + newVersion,
+        contentType: 'application/json'
+    ]
+    asynchttp_v1.get('responseHandlerMethod', params)
+}
+
+private responseHandlerMethod(response, data) {
+    if (response.hasError()) {
+        log.error "response has error: $response.errorMessage"
+    } else {
+        def results = response.json
+        state.latestSmartAppVersion = results.SmartApp;
+        state.latestDeviceVersion = results.DoorDevice;
+    }
+
+    logger("debug", "previousVersion: " + state?.previousVersion)
+    logger("debug", "installedVersion: " + state?.thisSmartAppVersion)
+    logger("debug", "latestVersion: " + state?.latestSmartAppVersion)
+    logger("debug", "deviceVersion: " + state?.latestDeviceVersion)
+}
+
+private getVersionData(now=false) {
+    def params = [
+        uri:  "https://raw.githubusercontent.com/tonesto7/SmartThings_SenseMonitor/master/resources/versions.json",
+        contentType: 'application/json'
+    ]
+    if(now) {
+        httpGet(params) { resp->
+            versionDataRespHandler(resp, null)
+        }
+    } else {
+        asynchttp_v1.get('versionDataRespHandler', params)
+    }
+}
+
+private versionDataRespHandler(resp, data) {
+    try {
+        if(resp.data) {
+            log.info "Getting Latest Version Data from versions.json File..."
+            state?.versionData = resp?.data
+            state?.lastVerUpdDt = getDtNow()
+        }
+        logger("trace", "versionDataRespHandler Resp: ${resp?.data}")
+    } catch(ex) {
+        log.error "versionDataRespHandler Error: ", ex
+    }
+}
+
+/******************************************
+|    Time and Date Conversion Functions
+*******************************************/
 def formatDt(dt, tzChg=true) {
 	def tf = new SimpleDateFormat("E MMM dd HH:mm:ss z yyyy")
 	if(tzChg) { if(location.timeZone) { tf.setTimeZone(location?.timeZone) } }
@@ -635,72 +696,79 @@ def GetTimeDiffSeconds(lastDate, sender=null) {
 	}
 }
 
-public sendMsg(String msgType, String msg, Boolean showEvt=true, Map pushoverMap=null, sms=null, push=null) {
-	//log.trace("sendMsg:  msgType: ${msgType}, msg: ${msg}, showEvt: ${showEvt}")
-	log.trace ("sendMsg")
-	def sentstr = "Push"
-	def sent = false
-	try {
-		def newMsg = "${msgType}: ${msg}" as String
-		def flatMsg = newMsg.toString().replaceAll("\n", " ")
-		if(!getOk2Notify()) {
-			LogAction("sendMsg: Message Skipped During Quiet Time ($flatMsg)", "info", true)
-			if(showEvt) { sendNotificationEvent(newMsg) }
-		} else {
-			
-            if(push || settings?.usePush) {
-                sentstr = "Push Message"
-                if(showEvt) {
-                    sendPush(newMsg)	// sends push and notification feed
-                } else {
-                    sendPushMessage(newMsg)	// sends push
-                }
-                sent = true
-            }
-            if(settings?.pushoverEnabled && settings?.pushoverDevices) {
-                sentstr = "Pushover Message"
-                Map msgObj = [:]
-                msgObj = pushoverMap ?: [title: msgType, message: msg, priority: (settings?.pushoverPriority?:0)]
-                if(settings?.pushoverSound) { msgObj?.sound = settings?.pushoverSound }
-                buildPushMessage(settings?.pushoverDevices, msgObj, true)
-                sent = true
-            }
-            def thephone = sms ? sms.toString() : settings?.phone ? settings?.phone?.toString() : ""
-            if(thephone) {
-                sentstr = "Text Message to Phone [${thephone}]"
-                def t0 = newMsg.take(140)
-                if(showEvt) {
-                    sendSms(thephone as String, t0 as String)	// send SMS and notification feed
-                } else {
-                    sendSmsMessage(thephone as String, t0 as String)	// send SMS
-                }
-                sent = true
-            }
-			if(sent) {
-				atomicState?.lastMsg = flatMsg
-				atomicState?.lastMsgDt = getDtNow()
-				LogAction("sendMsg: Sent ${sentstr} (${flatMsg})", "debug", true)
-			}
-		}
-	} catch (ex) {
-		log.error "sendMsg $sentstr Exception:", ex
+/******************************************
+|   App Input Description Functions
+*******************************************/
+String getAppNotifConfDesc() {
+	String str = ""
+	if(pushStatus()) {
+		def ap = getAppNotifDesc()
+		def nd = getNotifSchedDesc()
+		str += (settings?.usePush) ? "${str != "" ? "\n" : ""}Sending via: (Push)" : ""
+		str += (settings?.pushoverEnabled) ? "${str != "" ? "\n" : ""}Pushover: (Enabled)" : ""
+		str += (settings?.pushoverEnabled && settings?.pushoverPriority) ? "${str != "" ? "\n" : ""} • Priority: (${settings?.pushoverPriority})" : ""
+		str += (settings?.pushoverEnabled && settings?.pushoverSound) ? "${str != "" ? "\n" : ""} • Sound: (${settings?.pushoverSound})" : ""
+		str += (settings?.phone) ? "${str != "" ? "\n" : ""}Sending via: (SMS)" : ""
+		str += (ap != null) ? "${str != "" ? "\n" : ""}\nEnabled Alerts:\n${ap}" : ""
+		str += (nd != null) ? "${str != "" ? "\n" : ""}\nAlert Restrictions:\n${nd}" : ""
 	}
-	return sent
+	return str != "" ? str : null
 }
 
-//PushOver-Manager Input Generation Functions
-private getPushoverSounds(){return (Map) atomicState?.pushoverManager?.sounds?:[:]}
-private getPushoverDevices(){List opts=[];Map pmd=atomicState?.pushoverManager?:[:];pmd?.apps?.each{k,v->if(v&&v?.devices&&v?.appId){Map dm=[:];v?.devices?.sort{}?.each{i->dm["${i}_${v?.appId}"]=i};addInputGrp(opts,v?.appName,dm);}};return opts;}
-private inputOptGrp(List groups,String title){def group=[values:[],order:groups?.size()];group?.title=title?:"";groups<<group;return groups;}
-private addInputValues(List groups,String key,String value){def lg=groups[-1];lg["values"]<<[key:key,value:value,order:lg["values"]?.size()];return groups;}
-private listToMap(List original){original.inject([:]){r,v->r[v]=v;return r;}}
-private addInputGrp(List groups,String title,values){if(values instanceof List){values=listToMap(values)};values.inject(inputOptGrp(groups,title)){r,k,v->return addInputValues(r,k,v)};return groups;}
-private addInputGrp(values){addInputGrp([],null,values)}
-//PushOver-Manager Location Event Subscription Events, Polling, and Handlers
-public pushover_init(){subscribe(location,"pushoverManager",pushover_handler);pushover_poll()}
-public pushover_cleanup(){state?.remove("pushoverManager");unsubscribe("pushoverManager");}
-public pushover_poll(){sendLocationEvent(name:"pushoverManagerCmd",value:"poll",data:[empty:true],isStateChange:true,descriptionText:"Sending Poll Event to Pushover-Manager")}
-public pushover_msg(List devs,Map data){if(devs&&data){sendLocationEvent(name:"pushoverManagerMsg",value:"sendMsg",data:data,isStateChange:true,descriptionText:"Sending Message to Pushover Devices: ${devs}");}}
-public pushover_handler(evt){Map pmd=atomicState?.pushoverManager?:[:];switch(evt?.value){case"refresh":def ed = evt?.jsonData;String id = ed?.appId;Map pA = pmd?.apps?.size() ? pmd?.apps : [:];if(id){pA[id]=pA?."${id}"instanceof Map?pA[id]:[:];pA[id]?.devices=ed?.devices?:[];pA[id]?.appName=ed?.appName;pA[id]?.appId=id;pmd?.apps = pA;};pmd?.sounds=ed?.sounds;break;case "reset":pmd=[:];break;};atomicState?.pushoverManager=pmd;}
-//Builds Map Message object to send to Pushover Manager
-private buildPushMessage(List devices,Map msgData,timeStamp=false){if(!devices||!msgData){return};Map data=[:];data?.appId=app?.getId();data.devices=devices;data?.msgData=msgData;if(timeStamp){data?.msgData?.timeStamp=new Date().getTime()};pushover_msg(devices,data);}
+String getNotifSchedDesc() {
+	def sun = getSunriseAndSunset()
+	def startInput = settings?.qStartInput
+	def startTime = settings?.qStartTime
+	def stopInput = settings?.qStopInput
+	def stopTime = settings?.qStopTime
+	def dayInput = settings?.quietDays
+	def modeInput = settings?.quietModes
+	def notifDesc = ""
+	def getNotifTimeStartLbl = ( (startInput == "Sunrise" || startInput == "Sunset") ? ( (startInput == "Sunset") ? epochToTime(sun?.sunset.time) : epochToTime(sun?.sunrise.time) ) : (startTime ? time2Str(startTime) : "") )
+	def getNotifTimeStopLbl = ( (stopInput == "Sunrise" || stopInput == "Sunset") ? ( (stopInput == "Sunset") ? epochToTime(sun?.sunset.time) : epochToTime(sun?.sunrise.time) ) : (stopTime ? time2Str(stopTime) : "") )
+	notifDesc += (getNotifTimeStartLbl && getNotifTimeStopLbl) ? " • Silent Time: ${getNotifTimeStartLbl} - ${getNotifTimeStopLbl}" : ""
+	def days = getInputToStringDesc(dayInput)
+	def modes = getInputToStringDesc(modeInput)
+	notifDesc += days ? "${(getNotifTimeStartLbl || getNotifTimeStopLbl) ? "\n" : ""} • Silent Day${isPluralString(dayInput)}: ${days}" : ""
+	notifDesc += modes ? "${(getNotifTimeStartLbl || getNotifTimeStopLbl || days) ? "\n" : ""} • Silent Mode${isPluralString(modeInput)}: ${modes}" : ""
+	return (notifDesc != "") ? "${notifDesc}" : null
+}
+
+String getAppNotifDesc() {
+	def str = ""
+	str += settings?.sendMissedPollMsg != false ? "${str != "" ? "\n" : ""} • Missed Poll Alerts: (${strCapitalize(settings?.sendMissedPollMsg ?: "True")})" : ""
+	str += settings?.sendAppUpdateMsg != false ? "${str != "" ? "\n" : ""} • Code Updates: (${strCapitalize(settings?.sendAppUpdateMsg ?: "True")})" : ""
+	return str != "" ? str : null
+}
+
+String getInputToStringDesc(inpt, addSpace = null) {
+	Integer cnt = 0
+	String str = ""
+	if(inpt) {
+		inpt.sort().each { item ->
+			cnt = cnt+1
+			str += item ? (((cnt < 1) || (inpt?.size() > 1)) ? "\n      ${item}" : "${addSpace ? "      " : ""}${item}") : ""
+		}
+	}
+	//log.debug "str: $str"
+	return (str != "") ? "${str}" : null
+}
+
+def debugStatus() { return !settings?.appDebug ? "Off" : "On" }
+def deviceDebugStatus() { return !settings?.childDebug ? "Off" : "On" }
+def isAppDebug() { return !settings?.appDebug ? false : true }
+def isChildDebug() { return !settings?.childDebug ? false : true }
+
+String getAppDebugDesc() {
+	def str = ""
+	str += isAppDebug() ? "App Debug: (${debugStatus()})" : ""
+	str += isChildDebug() && str != "" ? "\n" : ""
+	str += isChildDebug() ? "Device Debug: (${deviceDebugStatus()})" : ""
+	return (str != "") ? "${str}" : null
+}
+
+private logger(type, msg) {
+    if(type && msg && settings?.appDebug) {
+        log."${type}" "${msg}"
+    }
+}
