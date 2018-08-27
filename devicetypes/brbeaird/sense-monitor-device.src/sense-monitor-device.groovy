@@ -25,8 +25,6 @@ String devVersion() { return "0.2.0"}
 metadata {
     definition (name: "Sense Monitor Device", namespace: "brbeaird", author: "Brian Beaird") {
         capability "Power Meter"
-        capability "Switch"
-        capability "Actuator"
         capability "Sensor"
         
         attribute "lastUpdated", "string"
