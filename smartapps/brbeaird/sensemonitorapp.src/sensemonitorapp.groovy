@@ -369,6 +369,7 @@ def lanEventHandler(evt) {
                 }
 				if(isMonitor) {
 					modCodeVerMap("monitorDevice", childDevice?.devVersion()) // Used for the Updater Notifiers
+					modCodeVerMap("server", senseDevice?.monitorData?.serverVersion)
 				} else {
 					modCodeVerMap("energyDevice", childDevice?.devVersion()) // Used for the Updater Notifiers
 				}
@@ -419,12 +420,14 @@ private appUpdateNotify() {
 	Boolean appUpd = isAppUpdateAvail()
 	Boolean monDevUpd = isMonitorDevUpdateAvail()
 	Boolean enDevUpd = isEnergyDevUpdateAvail()
+	Boolean servUpd = isServerUpdateAvail()
 	if(getLastUpdMsgSec() > state?.updNotifyWaitVal.toInteger()) {
-		if(appUpd || monDevUpd || enDevUpd) {
+		if(appUpd || monDevUpd || enDevUpd || servUpd) {
 			def str = ""
 			str += !appUpd ? "" : "${str == "" ? "" : "\n"}Sense App: v${state?.versionData?.versions?.mainApp?.ver?.toString()}"
 			str += !monDevUpd ? "" : "${str == "" ? "" : "\n"}Sense Monitor Device: v${state?.versionData?.versions?.monitorDevice?.ver?.toString()}"
 			str += !enDevUpd ? "" : "${str == "" ? "" : "\n"}Sense Energy Device: v${state?.versionData?.versions?.energyDevice?.ver?.toString()}"
+			str += !servUpd ? "" : "${str == "" ? "" : "\n"}Sense Node Service: v${state?.versionData?.versions?.server?.ver?.toString()}"
 			sendMsg("Info", "Sense Monitor Update(s) are Available:${str}...\n\nPlease visit the IDE to Update your code...")
 			state?.lastUpdMsgDt = getDtNow()
 		}
@@ -596,6 +599,11 @@ Boolean isMonitorDevUpdateAvail() {
 
 Boolean isEnergyDevUpdateAvail() {
 	if(verData?.versions && isCodeUpdateAvailable(state?.versionData?.versions?.energyDevice?.ver, state?.codeVersions?.energyDevice, "dev")) { return true }
+	return false
+}
+
+Boolean isServerUpdateAvail() {
+	if(verData?.versions && isCodeUpdateAvailable(state?.versionData?.versions?.server?.ver, state?.codeVersions?.server, "server")) { return true }
 	return false
 }
 

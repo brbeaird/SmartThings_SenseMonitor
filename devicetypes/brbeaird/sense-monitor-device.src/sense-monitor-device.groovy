@@ -30,12 +30,14 @@ metadata {
         capability "Sensor"
         
         attribute "lastUpdated", "string"
-        attribute "deviceLocation", "string"
-        attribute "dtCreated", "string"
-        attribute "deviceMake", "string"
-        attribute "deviceModel", "string"
-        attribute "detectionMature", "string"
-        attribute "deviceRevoked", "string"
+        attribute "firmwareVer", "string"
+        attribute "rail1Voltage", "string"
+        attribute "rail2Voltage", "string"
+        attribute "cycleHz", "string"
+        attribute "wifi_ssid", "string"
+        attribute "wifi_signal", "string"
+        attribute "networkDetection", "string"
+        attribute "detectionsPending", "string"
     }
 
     preferences {
@@ -44,11 +46,8 @@ metadata {
 
     tiles (scale: 2) {
         multiAttributeTile(name:"genericMulti", type:"generic", width:6, height:4) {
-            tileAttribute("device.switch", key: "PRIMARY_CONTROL") {
-                attributeState "on", label: '${currentValue}', icon: "st.switches.switch.on", backgroundColor: "#00a0dc"
-                attributeState "off", label: '${currentValue}', icon: "st.switches.switch.off", backgroundColor: "#ffffff"
-            }
-            tileAttribute("device.power", key: "SECONDARY_CONTROL") {
+            
+            tileAttribute("device.power", key: "PRIMARY_CONTROL") {
                 attributeState "power", label: '${currentValue}W', unit: "W",
                         foregroundColor: "#000000",
                         backgroundColors:[
@@ -58,6 +57,9 @@ metadata {
                             [value: 4000, color: "#FFF600"], //Yellow
                             [value: 5000, color: "#fb1b42"] //Bright Red
                         ]
+            }
+            tileAttribute("device.lastUpdated", key: "SECONDARY_CONTROL") {
+                attributeState "lastUpdated", label:'Last Updated:\n${currentValue}'
             }
         }
         valueTile("power", "device.power", decoration: "flat", width: 1, height: 1) {
@@ -72,33 +74,35 @@ metadata {
         valueTile("lastUpdated", "device.lastUpdated", height: 1, width: 3, inactiveLabel: false, decoration: "flat") {
             state("lastUpdated", label:'Last Updated:\n${currentValue}')
         }
-        valueTile("deviceLocation", "device.deviceLocation", height: 1, width: 3, inactiveLabel: false, decoration: "flat") {
-            state("deviceLocation", label:'Device Location:\n${currentValue}')
+        valueTile("rail1Voltage", "device.rail1Voltage", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("rail1Voltage", label:'Rail 1 Voltage:\n${currentValue}V', unit: "V")
         }
-        valueTile("dtCreated", "device.dtCreated", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
-            state("dtCreated", label:'Device Created:\n${currentValue}')
+        valueTile("rail2Voltage", "device.rail2Voltage", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("rail2Voltage", label:'Rail 2 Voltage:\n${currentValue}V', unit: "V")
         }
-        valueTile("deviceMake", "device.deviceMake", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
-            state("deviceMake", label:'Device Make:\n${currentValue}')
+        
+        valueTile("cycleHz", "device.cycleHz", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("cycleHz", label:'Cycle Hz:\n${currentValue}hz', unit: "HZ")
         }
-        valueTile("deviceModel", "device.deviceModel", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
-            state("deviceModel", label:'Device Model:\n${currentValue}')
+        valueTile("wifi_ssid", "device.wifi_ssid", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("wifi_ssid", label:'WiFi SSID:\n${currentValue}')
         }
-        valueTile("detectionMature", "device.detectionMature", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
-            state("detectionMature", label:'Mature Detection:\n${currentValue}')
+        valueTile("wifi_signal", "device.wifi_signal", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("wifi_signal", label:'WiFi Signal:\n${currentValue}', unit: "dBm")
         }
-        valueTile("deviceRevoked", "device.deviceRevoked", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
-            state("deviceRevoked", label:'Device Revoked:\n${currentValue}')
+        valueTile("networkDetection", "device.networkDetection", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("networkDetection", label:'Network Detection:\n${currentValue}')
+        }
+        valueTile("detectionsPending", "device.detectionsPending", height: 2, width: 4, inactiveLabel: false, decoration: "flat") {
+            state("detectionsPending", label:'Pending Device Detections:\n${currentValue}')
         }
         main(["power"])
-        details(["genericMulti", "lastUpdated", "deviceLocation", "dtCreated", "deviceMake", "deviceModel", "detectionMature", "deviceRevoked"])
+        details(["genericMulti", "firmwareVer",  "dtCreated", "rail1Voltage","rail2Voltage", "cycleHz", "wifi_ssid", "wifi_signal", "networkDetection", "detectionsPending"])
     }
 }
 
 def installed() {
 	log.trace "${device?.displayName} Executing Installed..."
-    def dt = formatDt(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
-    state?.dateCreated = dt
 	initialize()
 }
 
@@ -134,34 +138,50 @@ def getShortDevName(){
 def updateDeviceStatus(Map senseDevice){
     String devName = getShortDevName()
 
-    senseDevice?.each { k,v ->
-        log.debug "$k: $v"
-    }
+    // senseDevice?.monitorData?.each { k,v ->
+    //     log.debug "$k: $v"
+    // }
     Float currentPower = senseDevice?.usage?.isNumber() ? senseDevice?.usage as Float : 0.0
     Float oldPower = device.currentState("power")?.floatValue ?: -1
 
     // log.debug "usage: ${senseDevice?.usage} | currentPower: $currentPower | oldPower: ${oldPower}"
-
-    if(senseDevice?.containsKey("dateCreated")) {
-        def dtCreated = senseDevice?.dateCreated ? formatDt(parseDt(senseDevice?.dateCreated, "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")) : (state?.dateCreated ?: "")
-        if(isStateChange(device, "dtCreated", dtCreated as String)) {
-            sendEvent(name: "dtCreated", value: dtCreated as String, display: true, displayed: true)
+    String firmwareVer = senseDevice?.version ?: "Not Set"
+    if(isStateChange(device, "firmwareVer", firmwareVer?.toString())) {
+        sendEvent(name: "firmwareVer", value: firmwareVer?.toString(), display: true, displayed: true)
+    }
+    if(senseDevice?.monitorData) {
+        log.debug "voltage: ${senseDevice?.monitorData?.voltage}"
+        String volt1 = senseDevice?.monitorData?.voltage[0] ?: "Not Set"
+        if(isStateChange(device, "rail1Voltage", volt1?.toString())) {
+            sendEvent(name: "rail1Voltage", value: volt1?.toString(), display: true, displayed: true)
         }
-    }
 
-    String loc = senseDevice?.location ?: "Not Set"
-    if(isStateChange(device, "deviceLocation", loc?.toString())) {
-        sendEvent(name: "deviceLocation", value: loc?.toString(), display: true, displayed: true)
-    }
+        String volt2 = senseDevice?.monitorData?.voltage[1] ?: "Not Set"
+        if(isStateChange(device, "rail2Voltage", volt2?.toString())) {
+            sendEvent(name: "rail2Voltage", value: volt2?.toString(), display: true, displayed: true)
+        }
+        String hz = senseDevice?.monitorData?.hz ?: "Not Set"
+        if(isStateChange(device, "cycleHz", hz?.toString())) {
+            sendEvent(name: "cycleHz", value: hz?.toString(), display: true, displayed: true)
+        }
+        String ssid = senseDevice?.monitorData?.wifi_ssid ?: "Not Set"
+        if(isStateChange(device, "cyclwifi_ssideHz", ssid?.toString())) {
+            sendEvent(name: "wifi_ssid", value: ssid?.toString(), display: true, displayed: true)
+        }
+        String signal = senseDevice?.monitorData?.wifi_signal ?: "Not Set"
+        if(isStateChange(device, "wifi_signal", signal?.toString())) {
+            sendEvent(name: "wifi_signal", value: signal?.toString(), display: true, displayed: true)
+        }
+        String netDetect = (senseDevice?.monitorData?.ndt_enabled == true) ? "Enabled" : "Disabled"
+        if(isStateChange(device, "networkDetection", netDetect?.toString())) {
+            sendEvent(name: "networkDetection", value: netDetect?.toString(), display: true, displayed: true)
+        }
 
-    String make = senseDevice?.make ?: "Not Set"
-    if(isStateChange(device, "deviceMake", make?.toString())) {
-        sendEvent(name: "deviceMake", value: make?.toString(), display: true, displayed: true)
-    }
-
-    String model = senseDevice?.model ?: "Not Set"
-    if(isStateChange(device, "deviceModel", model?.toString())) {
-        sendEvent(name: "deviceModel", value: model?.toString(), display: true, displayed: true)
+        String pending = (senseDevice?.monitorData?.detectionsPending?.size()) ? senseDevice?.monitorData?.detectionsPending?.collect { "${it?.name} (${it?.progress}%)"}?.join("\n") : "Nothing Pending..."
+        log.debug "pending: $pending"
+        if(isStateChange(device, "detectionsPending", pending?.toString())) {
+            sendEvent(name: "detectionsPending", value: pending?.toString(), display: true, displayed: true)
+        }
     }
     
     if (oldPower != currentPower) {
@@ -171,7 +191,7 @@ def updateDeviceStatus(Map senseDevice){
             sendEvent(name: "power", value: currentPower, units: "W", display: true, displayed: true, isStateChange: true)
         }
     }
-    setOnlineStatus(true)
+    setOnlineStatus((senseDevice?.monitorData?.online != false))
     updateDeviceLastRefresh()
 }
 
