@@ -21,7 +21,8 @@
 
 import java.text.SimpleDateFormat
 String devVersion() { return "0.2.0"}
-
+String gitBranch() { return "tonesto7" }
+String getAppImg(imgName) { return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
 metadata {
     definition (name: "Sense Energy Device", namespace: "brbeaird", author: "Brian Beaird") {
         capability "Power Meter"
@@ -39,11 +40,11 @@ metadata {
     }
 
     preferences {
-       input "prefNotifyOn", "bool", required: false, title: "Push notifications when turned on?"
-       input "prefNotifyOnDelay", "number", required: false, title: "Delay notification until unit has remained ON for this many minutes"
-       input "prefNotifyOff", "bool", required: false, title: "Push notifications when turned off?"
-       input "prefNotifyOffDelay", "number", required: false, title: "Delay notification until unit has remained OFF for this many minutes"
-       input "showLogs", "bool", required: false, title: "Show Debug Logs?", defaultValue: false
+        input "prefNotifyOn", "bool", required: false, title: "Notify when turned on?", description: "Uses the Apps Notification Settings to Choose the destinations"
+        input "prefNotifyOnDelay", "number", required: false, title: "Delay notification until unit has remained ON for this many minutes"
+        input "prefNotifyOff", "bool", required: false, title: "Notify when turned off?", description: "Uses the Apps Notification Settings to Choose the destinations"
+        input "prefNotifyOffDelay", "number", required: false, title: "Delay notification until unit has remained OFF for this many minutes"
+        input "showLogs", "bool", required: false, title: "Show Debug Logs?", defaultValue: false
     }
 
     tiles (scale: 2) {
@@ -65,11 +66,7 @@ metadata {
             }
         }
         valueTile("power", "device.power", decoration: "flat", width: 1, height: 1) {
-            state "power", label:'${currentValue} W', unit: "W",
-                backgroundColors:[
-                    [value: 0, color: "#ffffff"],
-                    [value: 1, color: "#00a0dc"]
-                ]
+            state "power", label:'${currentValue} W', backgroundColors:[[value: 0, color: "#ffffff"],[value: 1, color: "#00a0dc"]]
         }
         valueTile("blank1", "device.blank", height: 1, width: 1, inactiveLabel: false, decoration: "flat") {
             state("default", label:'')
@@ -80,10 +77,10 @@ metadata {
         valueTile("lastUpdated", "device.lastUpdated", height: 1, width: 3, inactiveLabel: false, decoration: "flat") {
             state("lastUpdated", label:'Last Updated:\n${currentValue}')
         }
-        valueTile("deviceLocation", "device.deviceLocation", height: 1, width: 3, inactiveLabel: false, decoration: "flat") {
+        valueTile("deviceLocation", "device.deviceLocation", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
             state("deviceLocation", label:'Device Location:\n${currentValue}')
         }
-        valueTile("dtCreated", "device.dtCreated", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+        valueTile("dtCreated", "device.dtCreated", height: 1, width: 3, inactiveLabel: false, decoration: "flat") {
             state("dtCreated", label:'Device Created:\n${currentValue}')
         }
         valueTile("deviceMake", "device.deviceMake", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
@@ -93,13 +90,13 @@ metadata {
             state("deviceModel", label:'Device Model:\n${currentValue}')
         }
         valueTile("detectionMature", "device.detectionMature", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
-            state("detectionMature", label:'Mature Detection:\n${currentValue}')
+            state("detectionMature", label:'Detection Confirmed:\n${currentValue}')
         }
         valueTile("deviceRevoked", "device.deviceRevoked", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
             state("deviceRevoked", label:'Device Revoked:\n${currentValue}')
         }
         main(["power"])
-        details(["genericMulti", "lastUpdated", "deviceLocation", "dtCreated", "deviceMake", "deviceModel", "detectionMature", "deviceRevoked"])
+        details(["genericMulti", "lastUpdated", "dtCreated", "deviceLocation", "deviceMake", "deviceModel", "detectionMature", "deviceRevoked"])
     }
 }
 
@@ -175,20 +172,6 @@ def handlePendingNotification(lastActivated, lastCanceled, actionName, delayPref
         log.debug "Will check again in $timeLeftTillNotify seconds"
         if (actionName == "On") { runIn(timeLeftTillNotify, checkForOnNotify) }
         if (actionName == "Off") { runIn(timeLeftTillNotify, checkForOffNotify) }
-    }
-}
-
-def updateDeviceLastRefresh(lastRefresh){
-    log.debug "Last refresh: " + lastRefresh
-    def refreshDate = new Date()
-    def hour = refreshDate.format("h", location.timeZone)
-    def minute =refreshDate.format("m", location.timeZone)
-    def ampm = refreshDate.format("a", location.timeZone)
-    //def finalString = refreshDate.getDateString() + ' ' + hour + ':' + minute + ampm
-
-    def finalString = new Date().format('MM/dd/yyyy hh:mm a',location.timeZone)
-    if(isStateChange(device, "lastRefresh", finalString as String)) {
-        sendEvent(name: "lastRefresh", value: finalString, display: false, displayed: false)
     }
 }
 
@@ -301,7 +284,7 @@ public setOnlineStatus(Boolean isOnline) {
     }
 }
 
-def formatDt(dt, String tzFmt=("MM/d/yyyy hh:mm a")) {
+def formatDt(dt, String tzFmt=("MM/d/yyyy hh:mm:ss a")) {
 	def tf = new SimpleDateFormat(tzFmt); tf.setTimeZone(location.timeZone);
     return tf.format(dt)
 }
@@ -314,8 +297,8 @@ Boolean ok2Notify() {
     return (parent?.getOk2Notify())
 }
 
-def updateDeviceLastRefresh(){
-    def finalString = new Date().format('MM/d/yyyy hh:mm a',location.timeZone)
+def updateDeviceLastRefresh() {
+    def finalString = new Date().format('MM/d/yyyy hh:mm:ss a', location.timeZone)
     sendEvent(name: "lastUpdated", value: finalString, display: false , displayed: false)
 }
 

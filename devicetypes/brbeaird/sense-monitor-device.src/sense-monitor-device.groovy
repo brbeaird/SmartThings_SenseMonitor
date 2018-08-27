@@ -66,14 +66,11 @@ metadata {
                     [value: 1, color: "#00a0dc"]
                 ]
         }
-        valueTile("blank1", "device.blank", height: 1, width: 1, inactiveLabel: false, decoration: "flat") {
-            state("default", label:'')
+        valueTile("blank1x1", "device.blank", height: 1, width: 1, inactiveLabel: false, decoration: "flat") {
+            state("blank1x1", label:'')
         }
-        valueTile("blank2", "device.blank", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
-            state("default", label:'')
-        }
-        valueTile("lastUpdated", "device.lastUpdated", height: 1, width: 3, inactiveLabel: false, decoration: "flat") {
-            state("lastUpdated", label:'Last Updated:\n${currentValue}')
+        valueTile("blank2x1", "device.blank", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("blank1x1", label:'')
         }
         valueTile("firmwareVer", "device.firmwareVer", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
             state("firmwareVer", label:'Firmware:\n${currentValue}')
@@ -100,7 +97,7 @@ metadata {
             state("detectionsPending", label:'Pending Device Detections:\n${currentValue}')
         }
         main(["power"])
-        details(["genericMulti", "dtCreated", "phase1Voltage","phase2Voltage", "cycleHz", "wifi_ssid", "wifi_signal", "networkDetection", "detectionsPending", "firmwareVer"])
+        details(["genericMulti", "dtCreated", "phase1Voltage", "phase2Voltage", "cycleHz", "wifi_ssid", "wifi_signal", "networkDetection", "detectionsPending", "firmwareVer"])
     }
 }
 
@@ -118,20 +115,6 @@ def initialize() {
 	log.trace "${device?.displayName} Executing initialize"
  	sendEvent(name: "DeviceWatch-DeviceStatus", value: "online")
 	sendEvent(name: "DeviceWatch-Enroll", value: [protocol: "cloud", scheme:"untracked"].encodeAsJson(), displayed: false)
-}
-
-def updateDeviceLastRefresh(lastRefresh){
-    logger("debug", "Last refresh: " + lastRefresh)
-    def refreshDate = new Date()
-    def hour = refreshDate.format("h", location.timeZone)
-    def minute =refreshDate.format("m", location.timeZone)
-    def ampm = refreshDate.format("a", location.timeZone)
-    //def finalString = refreshDate.getDateString() + ' ' + hour + ':' + minute + ampm
-
-    def finalString = new Date().format('MM/dd/yyyy hh:mm a',location.timeZone)
-    if(isStateChange(device, "lastRefresh", finalString as String)) {
-        sendEvent(name: "lastRefresh", value: finalString, display: false, displayed: false)
-    }
 }
 
 def getShortDevName(){
@@ -203,7 +186,7 @@ public setOnlineStatus(Boolean isOnline) {
     }
 }
 
-def formatDt(dt, String tzFmt=("MM/d/yyyy hh:mm a")) {
+def formatDt(dt, String tzFmt=("MM/d/yyyy hh:mm:ss a")) {
 	def tf = new SimpleDateFormat(tzFmt); tf.setTimeZone(location.timeZone);
     return tf.format(dt)
 }
@@ -217,7 +200,7 @@ Boolean ok2Notify() {
 }
 
 def updateDeviceLastRefresh(){
-    def finalString = new Date().format('MM/d/yyyy hh:mm a',location.timeZone)
+    def finalString = new Date().format('MM/d/yyyy hh:mm:ss a',location.timeZone)
     sendEvent(name: "lastUpdated", value: finalString, display: false , displayed: false)
 }
 

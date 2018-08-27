@@ -76,14 +76,14 @@ def mainPage() {
 		}
 		section("Notifications:") {
 			def t0 = getAppNotifConfDesc()
-			href "notifPrefPage", title: "App and Device\nNotifications", description: (t0 ? "${t0}\n\nTap to modify" : "Tap to configure"), state: (t0 ? "complete" : null), image: getAppImg("notification_icon2.png")
+			href "notifPrefPage", title: "App and Device\nNotifications", description: (t0 ? "${t0}\n\nTap to modify" : "Tap to configure"), state: (t0 ? "complete" : null), image: getAppImg("notification2.png")
 		}
 		section("Logging:") {
 			def dbgDesc = getAppDebugDesc()
 			href "debugPrefPage", title: "Logging", description: (dbgDesc ? "${dbgDesc ?: ""}\n\nTap to modify..." : "Tap to configure..."), state: ((isAppDebug() || isChildDebug()) ? "complete" : null), image: getAppImg("log.png")
 		}
 		section("") {
-			href "uninstallPage", title: "Uninstall this App", description: "Tap to Remove...", image: getAppImg("uninstall_icon.png")
+			href "uninstallPage", title: "Uninstall this App", description: "Tap to Remove...", image: getAppImg("uninstall.png")
 		}
 	}
 }
@@ -119,13 +119,13 @@ def notifPrefPage() {
 		Integer updNotifyWait = 7200
 
 		section("Enable Push Messages:") {
-			input "usePush", "bool", title: "Send Push Notitifications\n(Optional)", required: false, submitOnChange: true, defaultValue: false, image: getAppImg("notification_icon.png")
+			input "usePush", "bool", title: "Send Push Notitifications\n(Optional)", required: false, submitOnChange: true, defaultValue: false, image: getAppImg("notification.png")
 		}
 		section("Enable Text Messaging:") {
-			input "phones", "phone", title: "Send SMS to Number\n(Optional)", required: false, submitOnChange: true, image: getAppImg("notification_icon2.png")
+			input "phones", "phone", title: "Send SMS to Number\n(Optional)", required: false, submitOnChange: true, image: getAppImg("notification2.png")
 		}
 		section("Enable Pushover Support:") {
-			input ("pushoverEnabled", "bool", title: "Use Pushover Integration", required: false, submitOnChange: true, image: getAppImg("pushover_icon.png"))
+			input ("pushoverEnabled", "bool", title: "Use Pushover Integration", required: false, submitOnChange: true, image: getAppImg("pushover.png"))
 			if(settings?.pushoverEnabled == true) {
 				if(state?.isInstalled) {
 					if(!state?.pushoverManager) {
@@ -150,10 +150,10 @@ def notifPrefPage() {
 			}
 			section("Notification Restrictions:") {
 				def t1 = getNotifSchedDesc()
-				href "setNotificationTimePage", title: "Notification Restrictions", description: (t1 ?: "Tap to configure"), state: (t1 ? "complete" : null), image: getAppImg("restriction_icon.png")
+				href "setNotificationTimePage", title: "Notification Restrictions", description: (t1 ?: "Tap to configure"), state: (t1 ? "complete" : null), image: getAppImg("restriction.png")
 			}
 			section("Missed Poll Alerts:") {
-				input (name: "sendMissedPollMsg", type: "bool", title: "Send Missed Checkin Alerts?", defaultValue: true, submitOnChange: true, image: getAppImg("late_icon.png"))
+				input (name: "sendMissedPollMsg", type: "bool", title: "Send Missed Checkin Alerts?", defaultValue: true, submitOnChange: true, image: getAppImg("late.png"))
 				if(settings?.sendMissedPollMsg) {
 					def misPollNotifyWaitValDesc = settings?.misPollNotifyWaitVal ?: "Default: 15 Minutes"
 					input (name: "misPollNotifyWaitVal", type: "enum", title: "Time Past the Missed Checkin?", required: false, defaultValue: 900, metadata: [values:notifValEnum()], submitOnChange: true)
@@ -175,7 +175,7 @@ def notifPrefPage() {
 				}
 			}
 			section("Code Update Alerts:") {
-				input (name: "sendAppUpdateMsg", type: "bool", title: "Send for Updates...", defaultValue: true, submitOnChange: true, image: getAppImg("update_icon.png"))
+				input (name: "sendAppUpdateMsg", type: "bool", title: "Send for Updates...", defaultValue: true, submitOnChange: true, image: getAppImg("update.png"))
 				if(settings?.sendAppUpdateMsg) {
 					def updNotifyWaitValDesc = settings?.updNotifyWaitVal ?: "Default: 2 Hours"
 					input (name: "updNotifyWaitVal", type: "enum", title: "Send reminders every?", required: false, defaultValue: 7200, metadata: [values:notifValEnum()], submitOnChange: true)
@@ -198,17 +198,17 @@ def setNotificationTimePage() {
 	dynamicPage(name: "setNotificationTimePage", title: "Prevent Notifications\nDuring these Days, Times or Modes", uninstall: false) {
 		def timeReq = (settings["qStartTime"] || settings["qStopTime"]) ? true : false
 		section() {
-			input "qStartInput", "enum", title: "Starting at", options: ["A specific time", "Sunrise", "Sunset"], defaultValue: null, submitOnChange: true, required: false, image: getAppImg("start_time_icon.png")
+			input "qStartInput", "enum", title: "Starting at", options: ["A specific time", "Sunrise", "Sunset"], defaultValue: null, submitOnChange: true, required: false, image: getAppImg("start_time.png")
 			if(settings["qStartInput"] == "A specific time") {
-				input "qStartTime", "time", title: "Start time", required: timeReq, image: getAppImg("start_time_icon.png")
+				input "qStartTime", "time", title: "Start time", required: timeReq, image: getAppImg("start_time.png")
 			}
-			input "qStopInput", "enum", title: "Stopping at", options: ["A specific time", "Sunrise", "Sunset"], defaultValue: null, submitOnChange: true, required: false, image: getAppImg("stop_time_icon.png")
+			input "qStopInput", "enum", title: "Stopping at", options: ["A specific time", "Sunrise", "Sunset"], defaultValue: null, submitOnChange: true, required: false, image: getAppImg("stop_time.png")
 			if(settings?."qStopInput" == "A specific time") {
-				input "qStopTime", "time", title: "Stop time", required: timeReq, image: getAppImg("stop_time_icon.png")
+				input "qStopTime", "time", title: "Stop time", required: timeReq, image: getAppImg("stop_time.png")
 			}
-			input "quietDays", "enum", title: "Only on these days of the week", multiple: true, required: false, image: getAppImg("day_calendar_icon.png"),
+			input "quietDays", "enum", title: "Only on these days of the week", multiple: true, required: false, image: getAppImg("day_calendar.png"),
 					options: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-			input "quietModes", "mode", title: "When these Modes are Active", multiple: true, submitOnChange: true, required: false, image: getAppImg("mode_icon.png")
+			input "quietModes", "mode", title: "When these Modes are Active", multiple: true, submitOnChange: true, required: false, image: getAppImg("mode.png")
 		}
 	}
 }
