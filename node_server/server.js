@@ -1,5 +1,7 @@
 //Required settings
 'use strict';
+
+const serverVersion = "0.2.0";
 //Libraries
 const sense = require('unofficial-sense'); //Temporarily using our own version until pull requests are merged in
 const request = require("request-promise");
@@ -103,7 +105,7 @@ function getData() {
                 console.log(dt + ' | ' + msg);
             }
 
-            function updateMonitorInfo(usageVal = 0) {
+            function updateMonitorInfo(usageVal = 0, otherData = {}) {
                 mySense.getMonitorInfo().then(monitor => {
                     // console.log('MonitorInfo:', monitor);
                     let devData = {
@@ -119,7 +121,13 @@ function getData() {
                             wifi_ssid: monitor.monitor_info.ssid || "",
                             version: monitor.monitor_info.version || ""
                         }
+
                     };
+                    if (Object.keys(otherData).length) {
+                        for (const key in otherData) {
+                            devData.monitorData[key] = otherData[key];
+                        }
+                    }
                     if (monitor.device_detection && monitor.device_detection.in_progress) {
                         devData.monitorData.detectionsPending = monitor.device_detection.in_progress || {};
                     }
@@ -216,6 +224,13 @@ function getData() {
                             }
                         }
 
+                        let otherMonData = {};
+
+                        otherMonData.voltage = data.payload.voltage;
+                        otherMonData.hz = data.payload.hz;
+                        otherMonData.serverVersion = serverVersion;
+                        updateMonitorInfo(convUsage(data.payload.w) || 0);
+
                         //Convert list to array for easier parsing in ST
                         var devArray = [];
 
@@ -257,7 +272,7 @@ function getData() {
                             //console.log("Sending data to SmartThings hub");
                             //prevTotalUsage = convUsage(arrSum(totalUseArr)) || 0; //Save current total for future comparison
                             // console.log('PrevTotalUsage:', prevTotalUsage);
-                            updateMonitorInfo(convUsage(data.payload.w) || 0);
+
                             lastPush = new Date();
                             var options = {
                                 method: 'POST',

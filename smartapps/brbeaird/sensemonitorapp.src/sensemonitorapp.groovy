@@ -26,7 +26,7 @@ String gitBranch() { return "tonesto7" }
 String getAppImg(imgName) 	{ return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
 
 definition(
-    name: "SenseMonitor",
+    name: "SenseMonitor App",
     namespace: "brbeaird",
     author: "Brian Beaird",
     description: "Connects SmartThings with Sense",
@@ -251,6 +251,7 @@ def uninstalled() {
 
 def initialize() {
     // listen to LAN incoming messages
+	app?.updateLabel("SenseMonitor App")
     runEvery5Minutes("notificationCheck")
     subscribe(app, onAppTouch)
     subscribe(location, null, lanEventHandler, [filterEvents:false])
@@ -324,6 +325,7 @@ def lanEventHandler(evt) {
             //log.debug result.versionInfo.SmartApp
             Map senseDeviceMap = [:]
             result?.devices?.each { senseDevice ->
+				Boolean isMonitor = (senseDevice?.id == "SenseMonitor")
                 senseDeviceMap[senseDevice?.id] = senseDevice
                 // log.debug "senseDevice(${senseDevice.name}): ${senseDevice}"
                 log.debug "${senseDevice.name} | State: (${senseDevice?.state?.toString().toUpperCase()}) | Usage: ${senseDevice?.usage}W"
@@ -332,18 +334,24 @@ def lanEventHandler(evt) {
                 def dni = [ app?.id, (senseDevice != "SenseMonitor" ? "senseDevice" : "senseMonitor"), senseDevice?.id].join('|')
                 //log.debug "device DNI will be: " + dni + " for " + senseDevice.name
                 def childDevice = getChildDevice(dni)
+				// log.debug "childHandlerName: ${childDevice?.name}"
                 def childDeviceAttrib = [:]
-                def fullName = senseDevice?.id != "SenseMonitor" ? "Sense-" + senseDevice?.name : "Sense-Monitor"
-                if (!childDevice){
+                def fullName = !isMonitor ? "Sense-" + senseDevice?.name : "Sense-Monitor"
+				def childHandlerName = isMonitor ? "Sense Monitor Device" : "Sense Energy Device"
+                if (!childDevice) {
                     log.debug "name will be: " + fullName
                     //childDeviceAttrib = ["name": senseDevice.name, "completedSetup": true]
-                    childDeviceAttrib = ["name": fullName, "completedSetup": true]
+                    childDeviceAttrib = [name: childHandlerName, label: fullName, completedSetup: true]
 
                     try{ 
-                        if(senseDevice?.id == "SenseMonitor") {
+                        if(isMonitor) {
                             log.debug "Creating NEW Sense Monitor Device: " + fullName
-                        } else { log.debug "Creating NEW Sense Device: " + fullName }
-                        childDevice = addChildDevice("brbeaird", "Sense Monitor Device", dni, null, childDeviceAttrib)
+							childDevice = addChildDevice("brbeaird", "Sense Monitor Device", dni, null, childDeviceAttrib)
+                        } else { 
+							log.debug "Creating NEW Sense Device: " + fullName 
+							childDevice = addChildDevice("brbeaird", "Sense Energy Device", dni, null, childDeviceAttrib)
+						}
+                        
                         childDevice?.updateDeviceStatus(senseDevice)
                     } catch(physicalgraph.app.exception.UnknownDeviceTypeException e) {
                         log.error "AddDevice Error! ", e
@@ -351,16 +359,19 @@ def lanEventHandler(evt) {
                     }
                 } else {
                     //Check and see if name needs a refresh
-                    if (childDevice?.name != fullName || childDevice?.label != fullName){
-                        log.debug ("Updating device name (old label was " + childDevice?.label + " old name was " + childDevice?.name + " new hotness: " + fullName)
-                        childDevice?.name = fullName
+                    if (childDevice?.name != childHandlerName || childDevice?.label != fullName){
+                        log.debug ("Updating device name (old label was " + childDevice?.label + " | old name was " + childDevice?.name + " new hotness: " + fullName)
+                        childDevice?.name = childHandlerName
                         childDevice?.label = fullName
                         //state.installMsg = state.installMsg + deviceName + ": updating device name (old name was " + childDevice.label + ") \r\n\r\n"
                     }
-                    modCodeVerMap("senseDevice", childDevice?.devVersion()) // Used for the Updater Notifiers
-                    
                     childDevice?.updateDeviceStatus(senseDevice)
                 }
+				if(isMonitor) {
+					modCodeVerMap("monitorDevice", childDevice?.devVersion()) // Used for the Updater Notifiers
+				} else {
+					modCodeVerMap("energyDevice", childDevice?.devVersion()) // Used for the Updater Notifiers
+				}
                 state?.lastDevDataUpd = getDtNow()
             }
             state?.senseDeviceMap = senseDeviceMap
@@ -399,18 +410,21 @@ private missPollNotify(Boolean on, Integer wait) {
 		if(sendMsg("${app.name} Data Refresh Issue", msg)) {
 			state?.lastMisPollMsgDt = getDtNow()
 		}
+		getChildDevices(true)?.each { cd-> cd?.sendEvent(name: "DeviceWatch-DeviceStatus", value: "offline", displayed: true, isStateChange: true) }
 	}
 }
 
 private appUpdateNotify() {
 	Boolean on = (settings?.sendAppUpdateMsg != false)
 	Boolean appUpd = isAppUpdateAvail()
-	Boolean devUpd = isDevUpdateAvail()
+	Boolean monDevUpd = isMonitorDevUpdateAvail()
+	Boolean enDevUpd = isEnergyDevUpdateAvail()
 	if(getLastUpdMsgSec() > state?.updNotifyWaitVal.toInteger()) {
-		if(appUpd || devUpd) {
+		if(appUpd || monDevUpd || enDevUpd) {
 			def str = ""
 			str += !appUpd ? "" : "${str == "" ? "" : "\n"}Sense App: v${state?.versionData?.versions?.mainApp?.ver?.toString()}"
-			str += !devUpd ? "" : "${str == "" ? "" : "\n"}Sense Device: v${state?.versionData?.versions?.senseDevice?.ver?.toString()}"
+			str += !monDevUpd ? "" : "${str == "" ? "" : "\n"}Sense Monitor Device: v${state?.versionData?.versions?.monitorDevice?.ver?.toString()}"
+			str += !enDevUpd ? "" : "${str == "" ? "" : "\n"}Sense Energy Device: v${state?.versionData?.versions?.energyDevice?.ver?.toString()}"
 			sendMsg("Info", "Sense Monitor Update(s) are Available:${str}...\n\nPlease visit the IDE to Update your code...")
 			state?.lastUpdMsgDt = getDtNow()
 		}
@@ -489,7 +503,7 @@ private buildPushMessage(List devices,Map msgData,timeStamp=false){if(!devices||
 
 
 private checkVersionData(now = false) { //This reads a JSON file from GitHub with version numbers
-	if (now && !state?.versionData || (getLastVerUpdSec() > (3600*6))) {
+	if (now || !state?.versionData || (getLastVerUpdSec() > (3600*6))) {
         if(canSchedule()) { 
             getVersionData(now)
         } else {
@@ -571,12 +585,17 @@ Boolean isCodeUpdateAvailable(String newVer, String curVer, String type) {
 }
 
 Boolean isAppUpdateAvail() {
-	if(isCodeUpdateAvailable(state?.versionData?.versions?.mainApp?.ver, state?.codeVersions?.mainApp, "manager")) { return true }
+	if(verData?.versions && isCodeUpdateAvailable(state?.versionData?.versions?.mainApp?.ver, state?.codeVersions?.mainApp, "manager")) { return true }
 	return false
 }
 
-Boolean isDevUpdateAvail() {
-	if(isCodeUpdateAvailable(state?.versionData?.versions?.senseDevice?.ver, state?.codeVersions?.senseDevice, "dev")) { return true }
+Boolean isMonitorDevUpdateAvail() {
+	if(verData?.versions && isCodeUpdateAvailable(state?.versionData?.versions?.monitorDevice?.ver, state?.codeVersions?.monitorDevice, "dev")) { return true }
+	return false
+}
+
+Boolean isEnergyDevUpdateAvail() {
+	if(verData?.versions && isCodeUpdateAvailable(state?.versionData?.versions?.energyDevice?.ver, state?.codeVersions?.energyDevice, "dev")) { return true }
 	return false
 }
 
@@ -585,7 +604,7 @@ def versionCheck(){
     state.thisDeviceVersion = ""
 
     def childExists = false
-    def childDevs = getChildDevices()
+    def childDevs = getChildDevices(true)
 
     if (childDevs.size() > 0){
         childExists = true
@@ -638,16 +657,22 @@ private getVersionData(now=false) {
             versionDataRespHandler(resp, null)
         }
     } else {
-        asynchttp_v1.get('versionDataRespHandler', params)
+        asynchttp_v1.get('versionDataRespHandler', params, [async: true])
     }
 }
 
 private versionDataRespHandler(resp, data) {
     try {
-        if(resp.data) {
-            log.info "Getting Latest Version Data from versions.json File..."
-            state?.versionData = resp?.data
-            state?.lastVerUpdDt = getDtNow()
+		if(data?.async && resp?.json) {
+			log.info "Getting Latest Version Data from versions.json File (ASYNC)"
+			state?.versionData = resp?.json
+			state?.lastVerUpdDt = getDtNow()
+		} else {
+			if(resp?.data) {
+				log.info "Getting Latest Version Data from versions.json File"
+				state?.versionData = resp?.data
+				state?.lastVerUpdDt = getDtNow()
+			}
         }
         logger("trace", "versionDataRespHandler Resp: ${resp?.data}")
     } catch(ex) {
