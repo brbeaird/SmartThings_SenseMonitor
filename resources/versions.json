@@ -1,13 +1,10 @@
 {
-
-    "updater": {
-        "versions": {
-            "mainApp": {
-                "ver": "0.2.0"
-            },
-            "senseDevice": {
-                "ver": "0.2.0"
-            }
+    "versions": {
+        "mainApp": {
+            "ver": "0.2.0"
+        },
+        "senseDevice": {
+            "ver": "0.2.0"
         }
     }
 }
