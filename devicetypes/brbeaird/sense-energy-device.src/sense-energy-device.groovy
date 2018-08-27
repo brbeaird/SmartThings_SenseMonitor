@@ -93,7 +93,7 @@ metadata {
             state("detectionMature", label:'Detection Confirmed:\n${currentValue}')
         }
         valueTile("deviceRevoked", "device.deviceRevoked", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
-            state("deviceRevoked", label:'Device Revoked:\n${currentValue}')
+            state("deviceRevoked", label:'Device Valid:\n${currentValue}')
         }
         main(["power"])
         details(["genericMulti", "lastUpdated", "dtCreated", "deviceLocation", "deviceMake", "deviceModel", "detectionMature", "deviceRevoked"])
@@ -252,13 +252,13 @@ def updateDeviceStatus(Map senseDevice){
         sendEvent(name: "deviceModel", value: model?.toString(), display: true, displayed: true)
     }
     if(senseDevice?.containsKey("revoked")) {
-        if(isStateChange(device, "deviceRevoked", (senseDevice?.revoked == true)?.toString())) {
-            sendEvent(name: "deviceRevoked", value: (senseDevice?.deviceRevoked == true)?.toString(), display: true, displayed: true)
+        if(isStateChange(device, "deviceRevoked", (senseDevice?.revoked != true)?.toString()?.capitalize())) {
+            sendEvent(name: "deviceRevoked", value: (senseDevice?.deviceRevoked != true)?.toString()?.capitalize(), display: true, displayed: true)
         }
     }
     if(senseDevice?.containsKey("mature")) {
-        if(isStateChange(device, "detectionMature", (senseDevice?.mature == true)?.toString())) {
-            sendEvent(name: "detectionMature", value: (senseDevice?.mature == true)?.toString(), display: true, displayed: true)
+        if(isStateChange(device, "detectionMature", (senseDevice?.mature == true)?.toString()?.capitalize())) {
+            sendEvent(name: "detectionMature", value: (senseDevice?.mature == true)?.toString()?.capitalize(), display: true, displayed: true)
         }
     }
     

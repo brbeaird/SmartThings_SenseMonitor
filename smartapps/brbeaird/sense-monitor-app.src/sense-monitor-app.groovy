@@ -39,16 +39,11 @@ definition(
 preferences {
 	// page(name: "prefConfigure", title: "Sense")
 	page(name: "mainPage")
-	page(name: "debugPrefPage")
 	page(name: "notifPrefPage")
 	page(name: "setNotificationTimePage")
 	page(name: "uninstallPage")
 	page(name: "infoPage")
 	page(name: "changeLogPage")
-	page(name: "savePage")
-	//TODO: Add version Checking
-	//TODO: Add preference to exclude Sense devices
-	//TODO: Add preference to NOT auto re-sync names
 }
 
 def appInfoSect(sect=true)	{
@@ -69,18 +64,25 @@ def mainPage() {
 	// getVersionInfo(0, 0)
 	dynamicPage(name: "mainPage", uninstall: false, install: true) {
 		appInfoSect()
-		section("Sense Devices:") {
+		section("") {
 			List devs = getDeviceList()?.collect { "${it?.value?.name} (${it?.value?.usage ?: 0} W)" }?.sort()
 			paragraph title: "Discovered Devices:", "${devs?.size() ? devs?.join("\n") : "No Devices Available"}"
-			input "senseDeviceFilter", "enum", title: "Only Create/Update these Devices", description: "Tap to select", options: (getDeviceList(true)?:[]), multiple: true, required: false, submitOnChange: true, image: getAppImg("power.png")
+		}
+		section("Device Preferences:") {
+			input "autoCreateDevices", "bool", title: "Auto Create New Devices?", description: "", required: false, defaultValue: true, submitOnChange: true, image: getAppImg("devices.png")
+			input "autoRenameDevices", "bool", title: "Rename Devices to Match Sense?", description: "", required: false, defaultValue: true, submitOnChange: true, image: getAppImg("name_tag.png")
+		}
+		section("Device Filtering:") {
+			Map devs = getDeviceList(true, false)
+			input "senseDeviceFilter", "enum", title: "Don't Use these Devices", description: "Tap to select", options: (devs ? devs?.sort{it?.value} : []), multiple: true, required: false, submitOnChange: true, image: getAppImg("exclude.png")
+			paragraph title:"Notice:", "You will need to manually remove any devices that were already created!"
 		}
 		section("Notifications:") {
 			def t0 = getAppNotifConfDesc()
 			href "notifPrefPage", title: "App and Device\nNotifications", description: (t0 ? "${t0}\n\nTap to modify" : "Tap to configure"), state: (t0 ? "complete" : null), image: getAppImg("notification2.png")
 		}
-		section("Logging:") {
-			def dbgDesc = getAppDebugDesc()
-			href "debugPrefPage", title: "Logging", description: (dbgDesc ? "${dbgDesc ?: ""}\n\nTap to modify..." : "Tap to configure..."), state: ((isAppDebug() || isChildDebug()) ? "complete" : null), image: getAppImg("log.png")
+		section ("Application Logs") {
+			input (name: "appDebug", type: "bool", title: "Show App Logs in the IDE?", required: false, defaultValue: false, submitOnChange: true, image: getAppImg("debug.png"))
 		}
 		section("") {
 			href "uninstallPage", title: "Uninstall this App", description: "Tap to Remove...", image: getAppImg("uninstall.png")
@@ -101,30 +103,21 @@ Map getDeviceList(isInputEnum=false, hideDefaults=true) {
 	return isInputEnum ? (devMap?.size() ? devMap?.collectEntries { [(it?.key):it?.value?.name] } : devMap) : devMap
 }
 
-def debugPrefPage() {
-	dynamicPage(name: "debugPrefPage", install: false) {
-		section ("Application Logs") {
-			input (name: "appDebug", type: "bool", title: "Show App Logs in the IDE?", required: false, defaultValue: false, submitOnChange: true, image: getAppImg("log.png"))
-		}
-		section ("Child Device Logs") {
-			input (name: "childDebug", type: "bool", title: "Show Device Logs in the IDE?", required: false, defaultValue: false, submitOnChange: true, image: getAppImg("log.png"))
-		}
-	}
-}
-
 def notifPrefPage() {
 	dynamicPage(name: "notifPrefPage", install: false) {
 		Integer pollWait = 900
 		Integer pollMsgWait = 3600
 		Integer updNotifyWait = 7200
-
-		section("Enable Push Messages:") {
+		section("") {
+			paragraph title: "Notice:", "The settings configure here are used by both the App and the Devices.", state: "complete"
+		}
+		section("Push Messages:") {
 			input "usePush", "bool", title: "Send Push Notitifications\n(Optional)", required: false, submitOnChange: true, defaultValue: false, image: getAppImg("notification.png")
 		}
-		section("Enable Text Messaging:") {
-			input "phones", "phone", title: "Send SMS to Number\n(Optional)", required: false, submitOnChange: true, image: getAppImg("notification2.png")
+		section("SMS Text Messaging:") {
+			input "phones", "phone", title: "Send SMS to Number\n(Optional)", required: false, submitOnChange: true, image: getAppImg("sms_phone.png")
 		}
-		section("Enable Pushover Support:") {
+		section("Pushover Support:") {
 			input ("pushoverEnabled", "bool", title: "Use Pushover Integration", required: false, submitOnChange: true, image: getAppImg("pushover.png"))
 			if(settings?.pushoverEnabled == true) {
 				if(state?.isInstalled) {
@@ -282,13 +275,8 @@ private modCodeVerMap(key, val) {
 }
 
 def lanEventHandler(evt) {
-	def description = evt.description
-	def hub = evt?.hubId
 	def msg = parseLanMessage(evt.description)
-	//def parsedEvent = parseLanMessage(description)
-	def body = msg.body
-	def headerMap = msg.headers      // => headers as a Map
-
+	def headerMap = msg?.headers      // => headers as a Map
 	//Filter out calls from other LAN devices
 	if (headerMap != null){
 		if (headerMap?.source != "STSense") {
@@ -302,34 +290,34 @@ def lanEventHandler(evt) {
 	}
 
 	Map result = [:]
-	if (body != null) {
+	if (msg?.body != null) {
 		try{
-			//log.debug body
 			def slurper = new groovy.json.JsonSlurper()
-			result = slurper.parseText(body)
+			result = slurper?.parseText(msg?.body)
 			//log.debug result
-		}
-		catch (e){
-			log.debug "FYI - got a Sense response, but it's apparently not JSON. Error: " + e + ". Body: " + body
+		} catch (e){
+			log.debug "FYI - got a Sense response, but it's apparently not JSON. Error: " + e + ". Body: " + msg?.body
 			return 1
 		}
 
 		/*
-		TODO:
-		Populate "availableDevices" map
-		If DNI is in "exclude" preference, do not create child
-		If "do not rename" preference, do not rename child
+			TODO:
+			If DNI is in "exclude" preference, do not create child | The preference exists it's just not being used yet.
+			If "do not rename" preference, do not rename child
 		*/
-
-		if (result?.devices){
+		List ignoreTheseDevs = settings?.senseDeviceFilter ?: []
+		if (result?.devices) {
 			//log.debug result.versionInfo.SmartApp
 			Map senseDeviceMap = [:]
 			result?.devices?.each { senseDevice ->
 				Boolean isMonitor = (senseDevice?.id == "SenseMonitor")
 				senseDeviceMap[senseDevice?.id] = senseDevice
 				// log.debug "senseDevice(${senseDevice.name}): ${senseDevice}"
-				log.debug "${senseDevice.name} | State: (${senseDevice?.state?.toString().toUpperCase()}) | Usage: ${senseDevice?.usage}W"
-
+				if(senseDevice?.id in ignoreTheseDevs) { 
+					log.warn "skipping ${senseDevice?.name} because it is in the do not use list..."
+					return 
+				}
+				logger("debug", "${senseDevice.name} | State: (${senseDevice?.state?.toString().toUpperCase()}) | Usage: ${senseDevice?.usage}W")
 				//def senseDevice = result.devices[0]
 				def dni = [ app?.id, (!isMonitor ? "senseDevice" : "senseMonitor"), senseDevice?.id].join('|')
 				//log.debug "device DNI will be: " + dni + " for " + senseDevice.name
@@ -342,34 +330,30 @@ def lanEventHandler(evt) {
 					log.debug "name will be: " + fullName
 					//childDeviceAttrib = ["name": senseDevice.name, "completedSetup": true]
 					childDeviceAttrib = [name: childHandlerName, label: fullName, completedSetup: true]
-
 					try{
 						if(isMonitor) {
 							log.debug "Creating NEW Sense Monitor Device: " + fullName
 							childDevice = addChildDevice("brbeaird", "Sense Monitor Device", dni, null, childDeviceAttrib)
 						} else {
-							log.debug "Creating NEW Sense Device: " + fullName
+							log.debug "Creating NEW Sense Energy Device: " + fullName
 							childDevice = addChildDevice("brbeaird", "Sense Energy Device", dni, null, childDeviceAttrib)
 						}
-
 						childDevice?.updateDeviceStatus(senseDevice)
-					} catch(physicalgraph.app.exception.UnknownDeviceTypeException e) {
-						log.error "AddDevice Error! ", e
-						//state.installMsg = state.installMsg + deviceName + ": problem creating RM device. Check your IDE to make sure the brbeaird : RainMachine device handler is installed and published. \r\n\r\n"
+					} catch(physicalgraph.app.exception.UnknownDeviceTypeException ex) {
+						log.error "AddDevice Error! ", ex
 					}
 				} else {
 					//Check and see if name needs a refresh
-					if (childDevice?.name != childHandlerName || childDevice?.label != fullName){
+					if (settings?.autoRenameDevices != false && childDevice?.name != childHandlerName || childDevice?.label != fullName) {
 						log.debug ("Updating device name (old label was " + childDevice?.label + " | old name was " + childDevice?.name + " new hotness: " + fullName)
 						childDevice?.name = childHandlerName
 						childDevice?.label = fullName
-						//state.installMsg = state.installMsg + deviceName + ": updating device name (old name was " + childDevice.label + ") \r\n\r\n"
 					}
 					childDevice?.updateDeviceStatus(senseDevice)
 				}
 				if(isMonitor) {
 					modCodeVerMap("monitorDevice", childDevice?.devVersion()) // Used for the Updater Notifiers
-					modCodeVerMap("server", senseDevice?.monitorData?.serverVersion)
+					modCodeVerMap("server", senseDevice?.monitorData?.serverVersion) // Used for the Updater Notifiers
 				} else {
 					modCodeVerMap("energyDevice", childDevice?.devVersion()) // Used for the Updater Notifiers
 				}
