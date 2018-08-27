@@ -239,7 +239,7 @@ function getData() {
                                 }
                             }
                             //Convert list to array for easier parsing in ST
-                            var devArray = [];
+                            let devArray = [];
 
                             //Loop over saved list again and mark any remaining devices as off
                             Object.keys(deviceList).forEach(function(key) {
@@ -259,7 +259,7 @@ function getData() {
                                 devArray.push(deviceList[key]);
                             });
 
-                            var secondsSinceLastPush = (Date.now() - lastPush.getTime()) / 1000;
+                            let secondsSinceLastPush = (Date.now() - lastPush.getTime()) / 1000;
                             // console.log('devArray: ', devArray);
                             //Override updateNow if it's been less than 15 seconds since our last push
                             if (secondsSinceLastPush <= minimumSecondsBetweenPush) {
@@ -287,7 +287,7 @@ function getData() {
                                 otherMonData.serverVersion = serverVersion;
                                 updateMonitorInfo(convUsage(data.payload.w) || 0, otherMonData);
                                 lastPush = new Date();
-                                var options = {
+                                let options = {
                                     method: 'POST',
                                     uri: 'http://' + smartThingsHubIP + ':39500/event',
                                     body: {
