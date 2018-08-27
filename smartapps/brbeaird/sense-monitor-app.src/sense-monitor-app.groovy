@@ -42,8 +42,6 @@ preferences {
 	page(name: "notifPrefPage")
 	page(name: "setNotificationTimePage")
 	page(name: "uninstallPage")
-	page(name: "infoPage")
-	page(name: "changeLogPage")
 }
 
 def appInfoSect(sect=true)	{
@@ -192,14 +190,6 @@ def setNotificationTimePage() {
 	}
 }
 
-def changeLogPage () {
-	dynamicPage(name: "changeLogPage", title: "View Change Info", install: false) {
-		section("App Revision History:") {
-			paragraph appVerInfo()
-		}
-	}
-}
-
 def uninstallPage() {
 	dynamicPage(name: "uninstallPage", title: "Uninstall", uninstall: true) {
 		section("") {
@@ -216,6 +206,7 @@ def installed() {
 }
 
 def updated() {
+	log.debug "Updated with settings: ${settings}"
 	if (state?.previousVersion != state?.thisSmartAppVersion){
 		getVersionInfo(state?.previousVersion, state?.thisSmartAppVersion);
 	}
@@ -225,13 +216,14 @@ def updated() {
 }
 
 def uninstalled() {
+	log.warn "uninstalling app and devices"
 	getVersionInfo(state.previousVersion, 0);
 }
 
 def initialize() {
 	// listen to LAN incoming messages
-	app?.updateLabel("Sense Monitor App")
-	runEvery5Minutes("notificationCheck")
+	if(app?.getLabel() != "Sense Monitor App") { app?.updateLabel("Sense Monitor App") }
+	runEvery5Minutes("notificationCheck") // This task checks for missed polls and app updates
 	subscribe(app, onAppTouch)
 	subscribe(location, null, lanEventHandler, [filterEvents:false])
 	stateCleanup()
@@ -239,13 +231,13 @@ def initialize() {
 }
 
 private stateCleanup() {
-	List items = ["availableDevices"]
+	List items = ["availableDevices", "lastMsgDt"]
 	items?.each { si-> if(state?.containsKey(si as String)) { state?.remove(si)} }
 }
 
 def onAppTouch(evt) {
-	log.trace "appTouch..."
-	sendMsg("Info", "Push Notification Test Successful. Notifications Enabled for ${app?.label}", true)
+	// log.trace "appTouch..."
+	// sendMsg("Info", "Push Notification Test Successful. Notifications Enabled for ${app?.label}", true)
 	notificationCheck()
 }
 
@@ -299,7 +291,7 @@ def lanEventHandler(evt) {
 					logger("warn", "skipping ${senseDevice?.name} because it is in the do not use list...")
 					return 
 				}
-				logger("debug", "${senseDevice.name} | State: (${senseDevice?.state?.toString().toUpperCase()}) | Usage: ${senseDevice?.usage}W")
+				// logger("debug", "${senseDevice.name} | State: (${senseDevice?.state?.toString().toUpperCase()}) | Usage: ${senseDevice?.usage}W")
 				//def senseDevice = result.devices[0]
 				def dni = [ app?.id, (!isMonitor ? "senseDevice" : "senseMonitor"), senseDevice?.id].join('|')
 				//log.debug "device DNI will be: " + dni + " for " + senseDevice.name
@@ -359,7 +351,7 @@ Map notifValEnum(allowCust = true) {
 }
 
 private notificationCheck() {
-	logger("trace", "notificationCheck")
+	// logger("trace", "notificationCheck")
 	checkVersionData()
 	if(!getOk2Notify()) { return }
 	missPollNotify((settings?.sendMissedPollMsg == true), (state?.misPollNotifyMsgWaitVal ?: 3600))
@@ -367,13 +359,13 @@ private notificationCheck() {
 }
 
 private missPollNotify(Boolean on, Integer wait) {
-	logger("trace", "missPollNotify() | on: $on | wait: $wait) | getLastDevicePollSec: ${getLastDevicePollSec()} | misPollNotifyWaitVal: ${state?.misPollNotifyWaitVal} | getLastMisPollMsgSec: ${getLastMisPollMsgSec()}")
+	logger("trace", "missPollNotify() | on: ($on) | wait: ($wait) | getLastDevicePollSec: (${getLastDevicePollSec()}) | misPollNotifyWaitVal: (${state?.misPollNotifyWaitVal}) | getLastMisPollMsgSec: (${getLastMisPollMsgSec()})")
 	if(!on || !wait || !(getLastDevicePollSec() > (state?.misPollNotifyWaitVal ?: 900))) { return }
 	if(!(getLastMisPollMsgSec() > wait.toInteger())) {
 		return
 	} else {
-		def msg = "\nThe app has not refreshed energy data in the last (${getLastDevicePollSec()}) seconds.\nPlease try refreshing data using device refresh button."
-		log.warn msg.toString().replaceAll("\n", " ")
+		def msg = "\nThe app has not received any device data from Sense service in the last (${getLastDevicePollSec()}) seconds.\nSomething must be wrong with the node server."
+		log.warn "${msg.toString().replaceAll("\n", " ")}"
 		if(sendMsg("${app.name} Data Refresh Issue", msg)) {
 			state?.lastMisPollMsgDt = getDtNow()
 		}
@@ -385,15 +377,16 @@ private appUpdateNotify() {
 	Boolean on = (settings?.sendAppUpdateMsg != false)
 	Boolean appUpd = isAppUpdateAvail()
 	Boolean monDevUpd = isMonitorDevUpdateAvail()
-	Boolean enDevUpd = isEnergyDevUpdateAvail()
+	Boolean enerDevUpd = isEnergyDevUpdateAvail()
 	Boolean servUpd = isServerUpdateAvail()
+	logger("trace", "appUpdateNotify() | on: (${on}) | appUpd: (${appUpd}) | monDevUpd: (${monDevUpd}) | enerDevUpd: (${enerDevUpd}) | servUpd: (${servUpd}) | getLastUpdMsgSec: ${getLastUpdMsgSec()} | state?.updNotifyWaitVal: ${state?.updNotifyWaitVal}")
 	if(getLastUpdMsgSec() > state?.updNotifyWaitVal.toInteger()) {
-		if(appUpd || monDevUpd || enDevUpd || servUpd) {
+		if(appUpd || monDevUpd || enerDevUpd || servUpd) {
 			def str = ""
-			str += !appUpd ? "" : "${str == "" ? "" : "\n"}Sense App: v${state?.versionData?.versions?.mainApp?.ver?.toString()}"
+			str += !appUpd ? "" : "${str == "" ? "" : "\n"}Sense Monitor App: v${state?.versionData?.versions?.mainApp?.ver?.toString()}"
 			str += !monDevUpd ? "" : "${str == "" ? "" : "\n"}Sense Monitor Device: v${state?.versionData?.versions?.monitorDevice?.ver?.toString()}"
-			str += !enDevUpd ? "" : "${str == "" ? "" : "\n"}Sense Energy Device: v${state?.versionData?.versions?.energyDevice?.ver?.toString()}"
-			str += !servUpd ? "" : "${str == "" ? "" : "\n"}Sense Node Service: v${state?.versionData?.versions?.server?.ver?.toString()}"
+			str += !enerDevUpd ? "" : "${str == "" ? "" : "\n"}Sense Energy Device: v${state?.versionData?.versions?.energyDevice?.ver?.toString()}"
+			str += !servUpd ? "" : "${str == "" ? "" : "\n"}Sense Node Server: v${state?.versionData?.versions?.server?.ver?.toString()}"
 			sendMsg("Info", "Sense Monitor Update(s) are Available:${str}...\n\nPlease visit the IDE to Update your code...")
 			state?.lastUpdMsgDt = getDtNow()
 		}
@@ -405,18 +398,15 @@ Integer getLastMsgSec() { return !state?.lastMsgDt ? 100000 : GetTimeDiffSeconds
 Integer getLastUpdMsgSec() { return !state?.lastUpdMsgDt ? 100000 : GetTimeDiffSeconds(state?.lastUpdMsgDt, "getLastUpdMsgSec").toInteger() }
 Integer getLastMisPollMsgSec() { return !state?.lastMisPollMsgDt ? 100000 : GetTimeDiffSeconds(state?.lastMisPollMsgDt, "getLastMisPollMsgSec").toInteger() }
 Integer getLastVerUpdSec() { return !state?.lastVerUpdDt ? 100000 : GetTimeDiffSeconds(state?.lastVerUpdDt, "getLastVerUpdSec").toInteger() }
-Boolean getOk2Notify() { return ((settings?.usePush || (settings?.pushoverEnabled && settings?.pushoverDevices)) && (daysOk(settings?.quietDays) && notificationTimeOk() && modesOk(settings?.quietModes))) }
 Integer getLastDevicePollSec() { return !state?.lastDevDataUpd ? 840 : GetTimeDiffSeconds(state?.lastDevDataUpd, "getLastDevicePollSec").toInteger() }
+Boolean getOk2Notify() { return ((settings?.smsNumbers?.toString()?.length()>=10 || settings?.usePush || (settings?.pushoverEnabled && settings?.pushoverDevices)) && (quietDaysOk(settings?.quietDays) && quietTimeOk() && quietModesOk(settings?.quietModes))) }
 
-Boolean modesOk(modeEntry) {
-	Boolean res = true
-	if(modeEntry) {
-		modeEntry?.each { m -> if(m.toString() == location?.mode.toString()) { res = false } }
-	}
-	return res
+Boolean quietModesOk(List modes) {
+	if(modes) { return (location?.mode?.toString() in modes) ? false : true }
+	return true
 }
 
-Boolean notificationTimeOk() {
+Boolean quietTimeOk() {
 	def strtTime = null
 	def stopTime = null
 	def now = new Date()
@@ -435,12 +425,13 @@ Boolean notificationTimeOk() {
 	} else { return true }
 }
 
-Boolean daysOk(days) {
+Boolean quietDaysOk(days) {
 	if(days) {
 		def dayFmt = new SimpleDateFormat("EEEE")
 		if(location.timeZone) { dayFmt.setTimeZone(location.timeZone) }
 		return days?.contains(dayFmt.format(new Date())) ? false : true
-	} else { return true }
+	}
+	return true
 }
 
 // Sends the notifications based on app settings
@@ -472,9 +463,9 @@ public sendMsg(String msgTitle, String msg, Boolean showEvt=true, Map pushoverMa
 				buildPushMessage(settings?.pushoverDevices, msgObj, true)
 				sent = true
 			}
-			String thePhones = sms ? sms.toString() : (settings?.smsNumbers?.toString() ?: null)
-			if(thePhones) {
-				List phones = thePhones?.toString()?.split("\\,")
+			String smsPhones = sms ? sms.toString() : (settings?.smsNumbers?.toString() ?: null)
+			if(smsPhones) {
+				List phones = smsPhones?.toString()?.split("\\,")
 				for (phone in phones) {
 					String t0 = newMsg.take(140)
 					if(showEvt) {
@@ -482,9 +473,9 @@ public sendMsg(String msgTitle, String msg, Boolean showEvt=true, Map pushoverMa
 					} else {
 						sendSmsMessage(phone?.trim(), t0)	// send SMS
 					}
-					logger("debug", "Sending sms to selected phones ${phones}")
+					
 				}
-				sentstr = "Text Message to Phone [${thephone}]"
+				sentstr = "Text Message to Phone [${phones}]"
 				sent = true
 			}
 			if(sent) {
@@ -541,27 +532,27 @@ Boolean isCodeUpdateAvailable(String newVer, String curVer, String type) {
 			result = (latestVer == newVer) ? true : false
 		}
 	}
-	// log.trace ("type: $type | newVer: $newVer | curVer: $curVer | newestVersion: ${latestVer} | result: $result")
+	// logger("trace", "isCodeUpdateAvailable | type: $type | newVer: $newVer | curVer: $curVer | newestVersion: ${latestVer} | result: $result")
 	return result
 }
 
 Boolean isAppUpdateAvail() {
-	if(verData?.versions && isCodeUpdateAvailable(state?.versionData?.versions?.mainApp?.ver, state?.codeVersions?.mainApp, "manager")) { return true }
+	if(state?.versionData?.versions && state?.codeVersions?.mainApp && isCodeUpdateAvailable(state?.versionData?.versions?.mainApp?.ver, state?.codeVersions?.mainApp, "manager")) { return true }
 	return false
 }
 
 Boolean isMonitorDevUpdateAvail() {
-	if(verData?.versions && isCodeUpdateAvailable(state?.versionData?.versions?.monitorDevice?.ver, state?.codeVersions?.monitorDevice, "dev")) { return true }
+	if(state?.versionData?.versions && state?.codeVersions?.monitorDevice && isCodeUpdateAvailable(state?.versionData?.versions?.monitorDevice?.ver, state?.codeVersions?.monitorDevice, "dev")) { return true }
 	return false
 }
 
 Boolean isEnergyDevUpdateAvail() {
-	if(verData?.versions && isCodeUpdateAvailable(state?.versionData?.versions?.energyDevice?.ver, state?.codeVersions?.energyDevice, "dev")) { return true }
+	if(state?.versionData?.versions && state?.codeVersions?.energyDevice && isCodeUpdateAvailable(state?.versionData?.versions?.energyDevice?.ver, state?.codeVersions?.energyDevice, "dev")) { return true }
 	return false
 }
 
 Boolean isServerUpdateAvail() {
-	if(verData?.versions && isCodeUpdateAvailable(state?.versionData?.versions?.server?.ver, state?.codeVersions?.server, "server")) { return true }
+	if(state?.versionData?.versions && state?.codeVersions?.server && isCodeUpdateAvailable(state?.versionData?.versions?.server?.ver, state?.codeVersions?.server, "server")) { return true }
 	return false
 }
 
@@ -613,23 +604,22 @@ private responseHandlerMethod(response, data) {
 	logger("debug", "deviceVersion: " + state?.latestDeviceVersion)
 }
 
-
 private checkVersionData(now = false) { //This reads a JSON file from GitHub with version numbers
 	if (now || !state?.versionData || (getLastVerUpdSec() > (3600*6))) {
 		if(canSchedule()) {
-			getVersionData(now)
+			getVersionData()
 		} else {
 			runIn(45, "getVersionData", [overwrite: true])
 		}
 	}
 }
 
-private getVersionData(now=false) {
+private getVersionData() {
 	def params = [
 		uri:  "https://raw.githubusercontent.com/tonesto7/SmartThings_SenseMonitor/master/resources/versions.json",
 		contentType: 'application/json'
 	]
-	if(now) {
+	try {
 		httpGet(params) { resp->
 			if(resp?.data) {
 				log.info "Getting Latest Version Data from versions.json File"
@@ -637,21 +627,8 @@ private getVersionData(now=false) {
 				state?.lastVerUpdDt = getDtNow()
 			}
 		}
-	} else {
-		asynchttp_v1.get('versionDataRespHandler', params)
-	}
-}
-
-private versionDataRespHandler(resp, data) {
-	try {
-		if(resp?.json) {
-			log.info "Getting Latest Version Data from versions.json File (ASYNC)"
-			state?.versionData = resp?.json
-			state?.lastVerUpdDt = getDtNow()
-		}
-		logger("trace", "versionDataRespHandler Resp: ${resp?.data}")
 	} catch(ex) {
-		log.error "versionDataRespHandler Error: ", ex
+		log.error "getVersionData Exception: ", ex
 	}
 }
 
