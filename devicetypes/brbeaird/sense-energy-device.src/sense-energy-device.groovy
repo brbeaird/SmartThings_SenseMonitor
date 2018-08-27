@@ -24,7 +24,7 @@ String devVersion() { return "0.2.0"}
 String gitBranch() { return "tonesto7" }
 String getAppImg(imgName) { return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
 metadata {
-    definition (name: "Sense Energy Device", namespace: "brbeaird", author: "Brian Beaird") {
+    definition (name: "Sense Energy Device", namespace: "brbeaird", author: "Brian Beaird", vid: "generic-power") {
         capability "Power Meter"
         capability "Switch"
         capability "Actuator"
@@ -125,7 +125,7 @@ def on(){
     log.debug "Scheduling push notification for ON!"
     unschedule(checkForOnNotify)
     unschedule(checkForOffNotify)
-    runIn(60*prefNotifyOnDelay, checkForOnNotify)
+    runIn(60*settings?.prefNotifyOnDelay, checkForOnNotify)
     state.OnNotificationIsPending = true
     state.lastTurnedOn = now()
 }
@@ -137,19 +137,19 @@ def off(){
     log.debug "Scheduling push notification for OFF!"
     unschedule(checkForOnNotify)
     unschedule(checkForOffNotify)
-    runIn(60*prefNotifyOffDelay, checkForOffNotify)
+    runIn(60*settings?.prefNotifyOffDelay, checkForOffNotify)
     state.OffNotificationIsPending = true
     state.lastTurnedOff = now()
 }
 */
 
-def checkForOnNotify(){handlePendingNotification(state.lastTurnedOn, state.lastTurnedOff, "On", prefNotifyOnDelay)}
-def checkForOffNotify(){handlePendingNotification(state.lastTurnedOff, state.lastTurnedOn, "Off", prefNotifyOffDelay)}
+def checkForOnNotify(){handlePendingNotification(state.lastTurnedOn, state.lastTurnedOff, "On", settings?.prefNotifyOnDelay)}
+def checkForOffNotify(){handlePendingNotification(state.lastTurnedOff, state.lastTurnedOn, "Off", settings?.prefNotifyOffDelay)}
 
 
 def handlePendingNotification(lastActivated, lastCanceled, actionName, delayPref){
     //If device has been canceled (opposite switch state activated) while we were waiting, bail out
-    log.debug "Checking to see if pending " + actionName + " notification should be sent..."
+    logger("debug", "Checking to see if pending " + actionName + " notification should be sent...")
     if (lastActivated == null){lastActivated = 0}
     if (lastCanceled == null){lastCanceled = 0}
     if (lastActivated < lastCanceled){
@@ -160,16 +160,16 @@ def handlePendingNotification(lastActivated, lastCanceled, actionName, delayPref
     Integer timeSinceLastChange = ((now() - lastActivated) / 1000) + 10
     Integer delayInSeconds = delayPref * 60
     if (timeSinceLastChange >= delayInSeconds) {
-        log.debug "Sending " + actionName + " notification"
+        logger("debug", "Sending " + actionName + " notification")
         // sendMsg(String msgType, String msg, Boolean showEvt=true, Map pushoverMap=null, sms=null, push=null)
-        parent?.sendMsg("Sense Alert", getShortDevName() + " turned " + actionName + " (" + (Math.round(timeSinceLastChange / 60)) +  " minutes ago.)")
+        parent?.sendMsg("Sense Device Alert", "${getShortDevName()} turned ${actionName} (${(Math.round(timeSinceLastChange / 60))} minutes ago.)")
 
         //if (actionName == "On"){state.OnNotificationIsPending = false}
         //if (actionName == "Off"){state.OffNotificationIsPending = false}
     } else { //If it's not time yet, reschedule a check
         Integer timeLeftTillNotify = (delayInSeconds - timeSinceLastChange)
         if (timeLeftTillNotify < 60) { timeLeftTillNotify = 60 }
-        log.debug "Will check again in $timeLeftTillNotify seconds"
+        logger("debug", "Will check again in $timeLeftTillNotify seconds")
         if (actionName == "On") { runIn(timeLeftTillNotify, checkForOnNotify) }
         if (actionName == "Off") { runIn(timeLeftTillNotify, checkForOffNotify) }
     }
@@ -190,34 +190,34 @@ def updateDeviceStatus(Map senseDevice){
     //If on/off status has changed
     if (statusChange){
          if (senseDevice?.state == "off"){
-             log.debug "Change Switch Status to: (OFF)"
+             logger("debug", "Change Switch Status to: (OFF)")
              sendEvent(name: "switch", value: "off", display: true, displayed: true, isStateChange: true, descriptionText: device?.displayName + " was off")
-             if (prefNotifyOff && ok2Notify()){
+             if (settings?.prefNotifyOff && ok2Notify()){
                  //Depending on prefs, send notification immediately or schedule after delay
-                 if (prefNotifyOffDelay == null || prefNotifyOffDelay == 0){
-                     parent?.sendMsg("Sense Device State Alert", devName + " turned off!")
+                 if (settings?.prefNotifyOffDelay == null || settings?.prefNotifyOffDelay == 0){
+                     parent?.sendMsg("Sense Device Alert", "${devName} turned off!")
                  } else {
-                     log.debug "Scheduling OFF push notification!"
+                     logger("debug", "Scheduling OFF push notification!")
                      unschedule(checkForOnNotify)
                      unschedule(checkForOffNotify)
-                     runIn(60*prefNotifyOffDelay, checkForOffNotify)
+                     runIn(60*settings?.prefNotifyOffDelay, checkForOffNotify)
                      //state.OffNotificationIsPending = true
                      state.lastTurnedOff = now()
                  }
              }
         }
         if (senseDevice.state == "on"){
-            log.debug "Change Switch Status to: (ON)"
+            logger("debug", "Change Switch Status to: (ON)")
             sendEvent(name: "switch", value: "on", display: true, displayed: true, isStateChange: true, descriptionText: device.displayName + " was on")
-            if (prefNotifyOn && ok2Notify()){
+            if (settings?.prefNotifyOn && ok2Notify()){
                 //Depending on prefs, send notification immediately or schedule after delay
-                if (prefNotifyOnDelay == null || prefNotifyOnDelay == 0){
-                    parent?.sendMsg("Sense Device State Alert", devName + " turned on!")
+                if (settings?.prefNotifyOnDelay == null || settings?.prefNotifyOnDelay == 0){
+                    parent?.sendMsg("Sense Device State Alert", "${devName} turned on!")
                 } else{
-                    log.debug "Scheduling ON push notification!"
+                    logger("debug", "Scheduling ON push notification!")
                     unschedule(checkForOnNotify)
                     unschedule(checkForOffNotify)
-                    runIn(60*prefNotifyOnDelay, checkForOnNotify)
+                    runIn(60*settings?.prefNotifyOnDelay, checkForOnNotify)
                     //state.OnNotificationIsPending = true
                     state.lastTurnedOn = now()
                 }

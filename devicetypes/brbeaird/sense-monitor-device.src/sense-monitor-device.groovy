@@ -31,6 +31,8 @@ metadata {
         attribute "firmwareVer", "string"
         attribute "phase1Voltage", "string"
         attribute "phase2Voltage", "string"
+        attribute "phase1Usage", "string"
+        attribute "phase2Usage", "string"
         attribute "cycleHz", "string"
         attribute "wifi_ssid", "string"
         attribute "wifi_signal", "string"
@@ -81,6 +83,12 @@ metadata {
         valueTile("phase2Voltage", "device.phase2Voltage", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
             state("phase2Voltage", label:'Phase 2:\n${currentValue}V', unit: "V")
         }
+        valueTile("phase1Usage", "device.phase1Usage", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("phase1Usage", label:'Phase 1 Usage:\n${currentValue}W', unit: "W")
+        }
+        valueTile("phase2Usage", "device.phase2Usage", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("phase2Usage", label:'Phase 2 Usage:\n${currentValue}W', unit: "W")
+        }
         valueTile("cycleHz", "device.cycleHz", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
             state("cycleHz", label:'Cycle Hz:\n${currentValue}hz', unit: "HZ")
         }
@@ -97,7 +105,7 @@ metadata {
             state("detectionsPending", label:'Pending Device Detections:\n${currentValue}')
         }
         main(["power"])
-        details(["genericMulti", "dtCreated", "phase1Voltage", "phase2Voltage", "cycleHz", "wifi_ssid", "wifi_signal", "networkDetection", "detectionsPending", "firmwareVer"])
+        details(["genericMulti", "dtCreated", "phase1Voltage", "phase2Voltage", "phase1Usage", "phase2Usage", "cycleHz", "wifi_ssid", "wifi_signal", "networkDetection", "detectionsPending", "firmwareVer"])
     }
 }
 
@@ -152,6 +160,16 @@ def updateDeviceStatus(Map senseDevice){
         String volt2 = senseDevice?.monitorData?.voltage && senseDevice?.monitorData?.voltage[1] ? senseDevice?.monitorData?.voltage[1] : "Not Set"
         if(isStateChange(device, "phase2Voltage", volt2?.toString())) {
             sendEvent(name: "phase2Voltage", value: volt2?.toString(), display: true, displayed: true)
+        }
+
+        String phaseUse1 = senseDevice?.monitorData?.phaseUsage && senseDevice?.monitorData?.phaseUsage[0] ? senseDevice?.monitorData?.phaseUsage[0] : "Not Set"
+        if(isStateChange(device, "phase1Usage", phaseUse1?.toString())) {
+            sendEvent(name: "phase1Usage", value: phaseUse1?.toString(), display: true, displayed: true)
+        }
+
+        String phaseUse2 = senseDevice?.monitorData?.phaseUsage && senseDevice?.monitorData?.phaseUsage[1] ? senseDevice?.monitorData?.phaseUsage[1] : "Not Set"
+        if(isStateChange(device, "phase2Usage", phaseUse2?.toString())) {
+            sendEvent(name: "phase2Usage", value: phaseUse2?.toString(), display: true, displayed: true)
         }
         String hz = senseDevice?.monitorData?.hz ?: "Not Set"
         if(isStateChange(device, "cycleHz", hz?.toString())) {

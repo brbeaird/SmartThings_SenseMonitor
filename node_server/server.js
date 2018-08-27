@@ -218,14 +218,23 @@ function getData() {
                                 deviceList[dev.id].usage = convUsage(dev.w);
                                 deviceList[dev.id].currentlyOn = true;
                                 if (dev.id !== "SenseMonitor") {
-                                    deviceList[dev.id].location = dev.location || "";
-                                    deviceList[dev.id].make = dev.make || "";
-                                    deviceList[dev.id].model = dev.model || "";
-                                    deviceList[dev.id].icon = dev.icon || "";
+                                    if (dev.location) {
+                                        deviceList[dev.id].location = dev.location;
+                                    }
+                                    if (dev.make) {
+                                        deviceList[dev.id].make = dev.make;
+                                    }
+                                    if (dev.model) {
+                                        deviceList[dev.id].model = dev.model;
+                                    }
+                                    if (dev.icon) {
+                                        deviceList[dev.id].icon = dev.icon;
+                                    }
                                     if (dev.tags) {
                                         deviceList[dev.id].mature = (dev.tags.Mature === "true") || false;
                                         deviceList[dev.id].revoked = (dev.tags.Revoked === "true") || false;
                                         deviceList[dev.id].dateCreated = dev.tags.DateCreated || "";
+                                        deviceList[dev.id].deviceType = dev.tags.type;
                                     }
                                 }
                             }
@@ -250,15 +259,6 @@ function getData() {
                                 devArray.push(deviceList[key]);
                             });
 
-                            //Keep track of the total so we can send an overall total device
-                            //Add in "total" device
-                            // devArray.push({
-                            //     id: 'TotalUsage',
-                            //     name: 'TotalUsage',
-                            //     state: 'on',
-                            //     usage: 
-                            // });
-
                             var secondsSinceLastPush = (Date.now() - lastPush.getTime()) / 1000;
                             // console.log('devArray: ', devArray);
                             //Override updateNow if it's been less than 15 seconds since our last push
@@ -268,14 +268,19 @@ function getData() {
 
                             if (updateNow || secondsSinceLastPush >= maximumSecondsBetweenPush) {
                                 //console.log("Sending data to SmartThings hub");
-                                //prevTotalUsage = convUsage(arrSum(totalUseArr)) || 0; //Save current total for future comparison
-                                // console.log('PrevTotalUsage:', prevTotalUsage);
+
                                 let otherMonData = {};
                                 if (Object.keys(data.payload.voltage).length) {
                                     let v = [];
                                     v.push(convUsage(data.payload.voltage[0], 1));
                                     v.push(convUsage(data.payload.voltage[1], 1));
                                     otherMonData.voltage = v;
+                                }
+                                if (Object.keys(data.payload.channels).length) {
+                                    let phaseUse = [];
+                                    phaseUse.push(convUsage(data.payload.channels[0], 2));
+                                    phaseUse.push(convUsage(data.payload.channels[1], 2));
+                                    otherMonData.phaseUsage = phaseUse;
                                 }
 
                                 otherMonData.hz = convUsage(data.payload.hz, 0);
