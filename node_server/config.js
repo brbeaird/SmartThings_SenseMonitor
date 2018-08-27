@@ -1,7 +1,7 @@
 'use strict';
 module.exports = {
-    email: 'tonesto7@gmail.com',
-    password: 'VeNWxbl1Iz5',
+    email: '',
+    password: '',
     smartThingsHubIP: '10.0.0.200',
     smartThingsAppId: '',
     autoReconnect: true,

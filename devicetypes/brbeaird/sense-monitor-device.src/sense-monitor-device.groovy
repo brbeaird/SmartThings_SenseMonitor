@@ -40,9 +40,7 @@ metadata {
         attribute "detectionsPending", "string"
     }
 
-    preferences {
-       
-    }
+    preferences { }
 
     tiles (scale: 2) {
         multiAttributeTile(name:"genericMulti", type:"generic", width:6, height:4) {
