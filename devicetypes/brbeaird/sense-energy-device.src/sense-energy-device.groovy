@@ -66,7 +66,7 @@ metadata {
             }
         }
         valueTile("power", "device.power", decoration: "flat", width: 1, height: 1) {
-            state "power", label:'${currentValue} W', backgroundColors:[[value: 0, color: "#ffffff"],[value: 1, color: "#00a0dc"]]
+            state "power", label:'${currentValue} W', backgroundColors:[[value: 0, color: "#ffffff"],[value: 1, color: "#00a0dc"]], icon: "https://raw.githubusercontent.com/tonesto7/SmartThings_SenseMonitor/master/resources/icons/sense_energy.png"
         }
         valueTile("blank1", "device.blank", height: 1, width: 1, inactiveLabel: false, decoration: "flat") {
             state("default", label:'')
