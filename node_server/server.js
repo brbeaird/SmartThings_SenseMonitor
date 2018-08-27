@@ -66,7 +66,11 @@ function addDevice(data) {
 
 function getData() {
     //On initial load, get basic list of devices
-    sense({ email: email, password: password, verbose: false })
+    sense({
+            email: email,
+            password: password,
+            verbose: false
+        })
         .then((mySense) => {
             console.log("Successfully Authenticated with Sense! Data is Incoming!");
             reconnectPending = false;
@@ -157,7 +161,9 @@ function getData() {
             }
 
             function convUsage(val, rndTo = 2) {
-                if (val !== -1) { val = parseFloat(val).toFixed(rndTo); }
+                if (val !== -1) {
+                    val = parseFloat(val).toFixed(rndTo);
+                }
                 return val;
             }
 
@@ -223,14 +229,6 @@ function getData() {
                                 }
                             }
                         }
-
-                        let otherMonData = {};
-
-                        otherMonData.voltage = data.payload.voltage;
-                        otherMonData.hz = data.payload.hz;
-                        otherMonData.serverVersion = serverVersion;
-                        updateMonitorInfo(convUsage(data.payload.w) || 0);
-
                         //Convert list to array for easier parsing in ST
                         var devArray = [];
 
@@ -272,7 +270,11 @@ function getData() {
                             //console.log("Sending data to SmartThings hub");
                             //prevTotalUsage = convUsage(arrSum(totalUseArr)) || 0; //Save current total for future comparison
                             // console.log('PrevTotalUsage:', prevTotalUsage);
-
+                            let otherMonData = {};
+                            otherMonData.voltage = data.payload.voltage;
+                            otherMonData.hz = data.payload.hz;
+                            otherMonData.serverVersion = serverVersion;
+                            updateMonitorInfo(convUsage(data.payload.w) || 0, otherMonData);
                             lastPush = new Date();
                             var options = {
                                 method: 'POST',
