@@ -2,7 +2,7 @@
  *	Sense Device
  *
  *	Author: Brian Beaird
- *  Last Updated: 2018-08-11
+ *  Last Updated: 2018-08-27 by A. Santilli
  *
  ***************************
  *
