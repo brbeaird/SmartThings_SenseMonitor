@@ -3,7 +3,10 @@
         "mainApp": {
             "ver": "0.2.0"
         },
-        "senseDevice": {
+        "monitorDevice": {
+            "ver": "0.2.0"
+        },
+        "energyDevice": {
             "ver": "0.2.0"
         }
     }
