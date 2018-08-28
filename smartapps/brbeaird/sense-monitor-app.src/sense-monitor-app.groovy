@@ -342,7 +342,8 @@ def lanEventHandler(evt) {
 		if (result?.devices) {
 			//log.debug result.versionInfo.SmartApp
 			Map senseDeviceMap = [:]
-			
+			List totalUsageArr = []
+			def totalUse = 0
 			result?.devices?.each { senseDevice ->
 				Boolean isMonitor = (senseDevice?.id == "SenseMonitor")
 				
@@ -384,10 +385,13 @@ def lanEventHandler(evt) {
 							childDevice?.label = fullName
 						}
 					}
+					if(!isMonitor) { totalUsageArr?.push(Float.parseFloat(senseDevice?.usage as String)) }
+					if(isMonitor) { totalUse = senseDevice?.usage }
 					childDevice?.updateDeviceStatus(senseDevice)
 				}
 				modCodeVerMap((isMonitor ? "monitorDevice" : "energyDevice"), childDevice?.devVersion()) // Update device versions in codeVersion state Map
 				state?.lastDevDataUpd = getDtNow()
+				log.debug "Total Usage: ${totalUse} | Array: ${totalUsageArr?.sum()}"
 			}
 			state?.senseDeviceMap = senseDeviceMap
 		}
@@ -413,6 +417,7 @@ def lanEventHandler(evt) {
 			appUpdateNotify()
 		}
 	}
+	return 0
 }
 
 private senseServiceUpdate() {

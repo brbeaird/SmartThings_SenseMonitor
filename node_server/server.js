@@ -40,6 +40,7 @@ var deviceList = {};
 var deviceFilter = [];
 var serviceStartTime = Date.now(); //Returns time in millis
 var eventCount = 0; //Keeps a tally of how many times data was sent to ST in the running sessions
+const arrSum = arr => arr.reduce((a, b) => Math.abs(a) + Math.abs(b), 0);
 
 var lastPush = new Date();
 lastPush.setDate(lastPush.getDate() - 1);
@@ -302,12 +303,11 @@ function startSenseStream() {
                             }
                             //Convert list to array for easier parsing in ST
                             let devArray = [];
-
+                            let totalUseArr = [];
                             //Loop over saved list again and mark any remaining devices as off
                             Object.keys(deviceList).forEach(function(key) {
                                 if (key !== "SenseMonitor") {
-                                    // totalUseArr.push(convUsage(deviceList[key].usage));
-
+                                    totalUseArr.push(convUsage(deviceList[key].usage));
                                     if (deviceList[key].currentlyOn === false) {
                                         if (deviceList[key].name !== "Other" && deviceList[key].state !== 'off' && deviceList[key].state !== "unknown") {
                                             tsLogger(deviceList[key].name + " turned off!");
@@ -320,18 +320,17 @@ function startSenseStream() {
                                 }
                                 devArray.push(deviceList[key]);
                             });
+                            // console.log('devArray: ', devArray);
 
                             let secondsSinceLastPush = (Date.now() - lastPush.getTime()) / 1000;
-                            // console.log('devArray: ', devArray);
                             // console.log('lastPush: ', secondsSinceLastPush, ' minSecs: ', minSecBetweenPush);
+
                             //Override updateNow if it's been less than 15 seconds since our last push
                             if (secondsSinceLastPush <= minSecBetweenPush) {
                                 updateNow = false;
                             }
 
                             if (updateNow || secondsSinceLastPush >= maxSecBetweenPush) {
-                                //console.log("Sending data to SmartThings hub");
-
                                 let otherMonData = {};
                                 if (Object.keys(data.payload.voltage).length) {
                                     let v = [];
@@ -347,6 +346,7 @@ function startSenseStream() {
                                 }
 
                                 otherMonData.hz = convUsage(data.payload.hz, 0);
+                                console.log('total usage: ' + arrSum(totalUseArr) + ' | payload usage: ' + data.payload.w);
                                 updateMonitorInfo(convUsage(data.payload.w) || 0, otherMonData);
                                 lastPush = new Date();
                                 let options = {
