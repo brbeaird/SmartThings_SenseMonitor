@@ -73,31 +73,41 @@ def mainPage() {
 	Boolean newInstall = !state?.isInstalled
 	dynamicPage(name: "mainPage", nextPage: (!newInstall ? "" : "servPrefPage"), uninstall: false, install: !newInstall) {
 		appInfoSect()
-		
 		section("Device Preferences:") {
-			List devs = getDeviceList()?.collect { "${it?.value?.name} (${it?.value?.usage ?: 0} W)" }?.sort()
-			paragraph title: "Discovered Devices:", "${devs?.size() ? devs?.join("\n") : "No Devices Available"}"
+			if(!newInstall) {
+				List devs = getDeviceList()?.collect { "${it?.value?.name} (${it?.value?.usage ?: 0} W)" }?.sort()
+				paragraph title: "Discovered Devices:", "${devs?.size() ? devs?.join("\n") : "No Devices Available"}"
+			}
 			input "autoCreateDevices", "bool", title: "Auto Create New Devices?", description: "", required: false, defaultValue: true, submitOnChange: true, image: getAppImg("devices.png")
 			input "autoRenameDevices", "bool", title: "Rename Devices to Match Sense?", description: "", required: false, defaultValue: true, submitOnChange: true, image: getAppImg("name_tag.png")
 		}
+		
 		section("Device Filtering:") {
-			Map devs = getDeviceList(true, false)
-			input "senseDeviceFilter", "enum", title: "Don't Use these Devices", description: "Tap to select", options: (devs ? devs?.sort{it?.value} : []), multiple: true, required: false, submitOnChange: true, image: getAppImg("exclude.png")
-			paragraph title:"Notice:", "Any devices created by this App will need to be manually removed, or uninstall the app to remove them all."
+			if(newInstall) {
+				paragraph title:"Notice:", "Device filtering options will be available once app install is complete.", required: true, state: null
+			} else {
+				Map devs = getDeviceList(true, false)
+				input "senseDeviceFilter", "enum", title: "Don't Use these Devices", description: "Tap to select", options: (devs ? devs?.sort{it?.value} : []), multiple: true, required: false, submitOnChange: true, image: getAppImg("exclude.png")
+				paragraph title:"Notice:", "Any sense devices created by this app will require manual removal, or uninstall the app to remove all devices!"
+			}
+		}
+		if(!newInstall) {
+			section("Sense Service:") {
+				def t0 = getServiceConfDesc()
+				href "servPrefPage", title: "Sense Service\nSettings", description: (t0 ? "${t0}\n\nTap to modify" : "Tap to configure"), state: (t0 ? "complete" : null), image: getAppImg("settings.png")
+			}
 		}
 		section("Notifications:") {
 			def t0 = getAppNotifConfDesc()
 			href "notifPrefPage", title: "App and Device\nNotifications", description: (t0 ? "${t0}\n\nTap to modify" : "Tap to configure"), state: (t0 ? "complete" : null), image: getAppImg("notification2.png")
 		}
-		section("Sense Service:") {
-			def t0 = getServiceConfDesc()
-			href "servPrefPage", title: "Sense Service\nSettings", description: (t0 ? "${t0}\n\nTap to modify" : "Tap to configure"), state: (t0 ? "complete" : null), image: getAppImg("settings.png")
-		}
 		section ("Application Logs") {
 			input (name: "appDebug", type: "bool", title: "Show App Logs in the IDE?", required: false, defaultValue: false, submitOnChange: true, image: getAppImg("debug.png"))
 		}
-		section("") {
-			href "uninstallPage", title: "Uninstall this App", description: "Tap to Remove...", image: getAppImg("uninstall.png")
+		if(!newInstall) {
+			section("") {
+				href "uninstallPage", title: "Uninstall this App", description: "Tap to Remove...", image: getAppImg("uninstall.png")
+			}
 		}
 	}
 }
@@ -124,14 +134,14 @@ def servPrefPage() {
 			}
 		}
 		section("Hub Selection:") {
-			input(name: "stHub", type: "hub", title: "Select Local Hub", description: "This will help to make sure ip changes are sent to service.", required: true, submitOnChange: true, image: getAppImg("hub.png"))
+			input(name: "stHub", type: "hub", title: "Select Local Hub", description: "IP adress changes will be sent to service.", required: true, submitOnChange: true, image: getAppImg("hub.png"))
 		}
 		if(settings?.stHub) {
 			section("Service Push Settings") {
-				input (name: "minSecBetweenPush", type: "number", title: "Minimum Wait Between Updates", description: "In Seconds...", required: false, defaultValue: 10, submitOnChange: true, image: getAppImg("delay_time.png"))
-				input (name: "maxSecBetweenPush", type: "number", title: "Maximum Wait Between Updates", description: "In Seconds...", required: false, defaultValue: 60, submitOnChange: true, image: getAppImg("delay_time.png"))
+				input (name: "minSecBetweenPush", type: "number", title: "Minimum Wait Between Updates", description: "in Seconds...", required: false, defaultValue: 10, submitOnChange: true, image: getAppImg("delay_time.png"))
+				input (name: "maxSecBetweenPush", type: "number", title: "Maximum Wait Between Updates", description: "in Seconds...", required: false, defaultValue: 60, submitOnChange: true, image: getAppImg("delay_time.png"))
 				input (name: "usagePushThreshold", type: "number", title: "Usage Change to Trigger Update", description: "In Watts...", required: false, defaultValue: 200, submitOnChange: true, image: getAppImg("threshold.png"))
-				paragraph title: "NOTICE", "To send these changes to the service you must press Done all the way out of the smartapp"
+				paragraph title: "Notice", "These changes will be applied on the next server data refresh."
 			}
 		}
 		if(!newInstall && state?.nodeServiceInfo) {
@@ -167,8 +177,8 @@ def notifPrefPage() {
 					} else {
 						input "pushoverDevices", "enum", title: "Select Pushover Devices", description: "Tap to select", groupedOptions: getPushoverDevices(), multiple: true, required: false, submitOnChange: true
 						if(settings?.pushoverDevices) {
-							def t0 = [(-2):"Lowest", (-1):"Low", 0:"Normal", 1:"High", 2:"Emergency"]
-							input "pushoverPriority", "enum", title: "Notification Priority (Optional)", description: "Tap to select", defaultValue: "Normal", required: false, multiple: false, submitOnChange: true, options: t0
+							def t0 = ["-2":"Lowest", "-1":"Low", "0":"Normal", "1":"High", "2":"Emergency"]
+							input "pushoverPriority", "enum", title: "Notification Priority (Optional)", description: "Tap to select", defaultValue: "0", required: false, multiple: false, submitOnChange: true, options: t0
 							input "pushoverSound", "enum", title: "Notification Sound (Optional)", description: "Tap to select", defaultValue: "pushover", required: false, multiple: false, submitOnChange: true, options: getPushoverSounds()
 						}
 					}
@@ -258,7 +268,7 @@ def updated() {
 
 def uninstalled() {
 	log.warn "uninstalling app and devices"
-	getVersionInfo(state.previousVersion, 0);
+	// getVersionInfo(state.previousVersion, 0);
 }
 
 def initialize() {
@@ -704,6 +714,7 @@ private responseHandlerMethod(response, data) {
 
 private checkVersionData(now = false) { //This reads a JSON file from GitHub with version numbers
 	if (now || !state?.versionData || (getLastVerUpdSec() > (3600*6))) {
+		if(now && (getLastVerUpdSec() < 300)) { return }
 		getVersionData()
 	}
 }
@@ -780,7 +791,7 @@ String getAppNotifConfDesc() {
 		str += (settings?.pushoverEnabled && settings?.pushoverPriority) ? "${str != "" ? "\n" : ""} • Priority: (${settings?.pushoverPriority})" : ""
 		str += (settings?.pushoverEnabled && settings?.pushoverSound) ? "${str != "" ? "\n" : ""} • Sound: (${settings?.pushoverSound})" : ""
 		str += (settings?.phone) ? "${str != "" ? "\n" : ""}Sending via: (SMS)" : ""
-		str += (ap) ? "${str != "" ? "\n" : ""}Enabled Alerts:\n${ap}" : ""
+		str += (ap) ? "${str != "" ? "\n\n" : ""}Enabled Alerts:\n${ap}" : ""
 		str += (ap && nd) ? "${str != "" ? "\n" : ""}\nAlert Restrictions:\n${nd}" : ""
 	}
 	return str != "" ? str : null
@@ -818,8 +829,8 @@ String getServiceConfDesc() {
 
 String getAppNotifDesc() {
 	def str = ""
-	str += settings?.sendMissedPollMsg != false ? "${str != "" ? "\n" : ""} • Missed Poll Alerts: (${strCapitalize(settings?.sendMissedPollMsg ?: "True")})" : ""
-	str += settings?.sendAppUpdateMsg != false ? "${str != "" ? "\n" : ""} • Code Updates: (${strCapitalize(settings?.sendAppUpdateMsg ?: "True")})" : ""
+	str += settings?.sendMissedPollMsg != false ? "${str != "" ? "\n" : ""} • Missed Poll Alerts" : ""
+	str += settings?.sendAppUpdateMsg != false ? "${str != "" ? "\n" : ""} • Code Updates" : ""
 	return str != "" ? str : null
 }
 
