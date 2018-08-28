@@ -32,7 +32,6 @@ Map minVersions() { //These define the minimum versions of code this app will wo
 	]
 }
 
-
 definition(
 	name: "Sense Monitor App",
 	namespace: "brbeaird",
@@ -45,15 +44,13 @@ definition(
 
 
 preferences {
-	// page(name: "prefConfigure", title: "Sense")
 	page(name: "mainPage")
+	page(name: "newSetupPage")
 	page(name: "notifPrefPage")
 	page(name: "servPrefPage")
 	page(name: "setNotificationTimePage")
 	page(name: "uninstallPage")
 }
-
-
 
 def appInfoSect(sect=true)	{
 	def str = ""
@@ -64,35 +61,37 @@ def appInfoSect(sect=true)	{
 }
 
 def mainPage() {
-	checkVersionData(true)
+	
 	// state.previousVersion = state.thisSmartAppVersion
 	// if (state.previousVersion == null){
 	//     state.previousVersion = 0;
 	// }
 	// state.thisSmartAppVersion = "0.1.0"
 	// getVersionInfo(0, 0)
-	dynamicPage(name: "mainPage", uninstall: false, install: true) {
+	
+	checkVersionData(true)
+	Boolean newInstall = !state?.isInstalled
+	dynamicPage(name: "mainPage", nextPage: (!newInstall ? "" : "servPrefPage"), uninstall: false, install: !newInstall) {
 		appInfoSect()
-		section("") {
+		
+		section("Device Preferences:") {
 			List devs = getDeviceList()?.collect { "${it?.value?.name} (${it?.value?.usage ?: 0} W)" }?.sort()
 			paragraph title: "Discovered Devices:", "${devs?.size() ? devs?.join("\n") : "No Devices Available"}"
-		}
-		section("Device Preferences:") {
 			input "autoCreateDevices", "bool", title: "Auto Create New Devices?", description: "", required: false, defaultValue: true, submitOnChange: true, image: getAppImg("devices.png")
 			input "autoRenameDevices", "bool", title: "Rename Devices to Match Sense?", description: "", required: false, defaultValue: true, submitOnChange: true, image: getAppImg("name_tag.png")
 		}
 		section("Device Filtering:") {
 			Map devs = getDeviceList(true, false)
 			input "senseDeviceFilter", "enum", title: "Don't Use these Devices", description: "Tap to select", options: (devs ? devs?.sort{it?.value} : []), multiple: true, required: false, submitOnChange: true, image: getAppImg("exclude.png")
-			paragraph title:"Notice:", "You will need to manually remove any devices that were already created!"
+			paragraph title:"Notice:", "Any devices created by this App will need to be manually removed, or uninstall the app to remove them all."
 		}
 		section("Notifications:") {
 			def t0 = getAppNotifConfDesc()
 			href "notifPrefPage", title: "App and Device\nNotifications", description: (t0 ? "${t0}\n\nTap to modify" : "Tap to configure"), state: (t0 ? "complete" : null), image: getAppImg("notification2.png")
 		}
 		section("Sense Service:") {
-			def t0 = ""
-			href "servPrefPage", title: "Sense Service\nPreferences", description: (t0 ? "${t0}\n\nTap to modify" : "Tap to configure"), state: (t0 ? "complete" : null), image: getAppImg("settings.png")
+			def t0 = getServiceConfDesc()
+			href "servPrefPage", title: "Sense Service\nSettings", description: (t0 ? "${t0}\n\nTap to modify" : "Tap to configure"), state: (t0 ? "complete" : null), image: getAppImg("settings.png")
 		}
 		section ("Application Logs") {
 			input (name: "appDebug", type: "bool", title: "Show App Logs in the IDE?", required: false, defaultValue: false, submitOnChange: true, image: getAppImg("debug.png"))
@@ -117,15 +116,28 @@ Map getDeviceList(isInputEnum=false, hideDefaults=true) {
 }
 
 def servPrefPage() {
-	dynamicPage(name: "servPrefPage", install: false) {
-		section("Hub Selection:") {
-			input(name: "stHub", type: "hub", title: "Select Local Hub", description: "This will help to make sure ip changes are sent to service.", submitOnChange: true, image: getAppImg("hub_icon.png"))
+	Boolean newInstall = !state?.isInstalled
+	dynamicPage(name: "servPrefPage", install: newInstall) {
+		if(newInstall) {
+			section("") {
+				paragraph "Please configure the options below before completing the App install", state: "complete"
+			}
 		}
-		section("Service Push Settings") {
-			input (name: "minSecBetweenPush", type: "number", title: "Minimum Wait Between Updates", description: "In Seconds...", required: false, defaultValue: 10, submitOnChange: true, image: getAppImg("delay_time.png"))
-			input (name: "maxSecBetweenPush", type: "number", title: "Maximum Wait Between Updates", description: "In Seconds...", required: false, defaultValue: 60, submitOnChange: true, image: getAppImg("delay_time.png"))
-			input (name: "usagePushThreshold", type: "number", title: "Usage Change to Trigger Update", description: "In Watts...", required: false, defaultValue: 200, submitOnChange: true, image: getAppImg("delay_time.png"))
-			paragraph title: "NOTICE", "To send these changes to the service you must press Done all the way out of the smartapp"
+		section("Hub Selection:") {
+			input(name: "stHub", type: "hub", title: "Select Local Hub", description: "This will help to make sure ip changes are sent to service.", required: true, submitOnChange: true, image: getAppImg("hub.png"))
+		}
+		if(settings?.stHub) {
+			section("Service Push Settings") {
+				input (name: "minSecBetweenPush", type: "number", title: "Minimum Wait Between Updates", description: "In Seconds...", required: false, defaultValue: 10, submitOnChange: true, image: getAppImg("delay_time.png"))
+				input (name: "maxSecBetweenPush", type: "number", title: "Maximum Wait Between Updates", description: "In Seconds...", required: false, defaultValue: 60, submitOnChange: true, image: getAppImg("delay_time.png"))
+				input (name: "usagePushThreshold", type: "number", title: "Usage Change to Trigger Update", description: "In Watts...", required: false, defaultValue: 200, submitOnChange: true, image: getAppImg("threshold.png"))
+				paragraph title: "NOTICE", "To send these changes to the service you must press Done all the way out of the smartapp"
+			}
+		}
+		if(!newInstall && state?.nodeServiceInfo) {
+			section() {
+				paragraph title: "Service Info:", getServInfoDesc(), state: "complete"
+			}
 		}
 	}
 }
@@ -239,7 +251,7 @@ def updated() {
 	// if (state?.previousVersion != state?.thisSmartAppVersion){
 	// 	getVersionInfo(state?.previousVersion, state?.thisSmartAppVersion);
 	// }
-	state?.isInstalled = true
+	if(!state?.isInstalled) { state?.isInstalled = true }
 	unsubscribe()
 	initialize()
 }
@@ -793,10 +805,42 @@ String getNotifSchedDesc() {
 	return (notifDesc != "") ? "${notifDesc}" : null
 }
 
+String getServiceConfDesc() {
+	String str = ""
+	str += (settings?.stHub) ? "${str != "" ? "\n" : ""}Hub Info:" : ""
+	str += (settings?.stHub) ? "${str != "" ? "\n" : ""} • IP: ${settings?.stHub?.getLocalIP()}" : ""
+	str += (settings?.usagePushThreshold || settings?.minSecBetweenPush || settings?.maxSecBetweenPush) ? "\n\nServer Push Settings:" : ""
+	str += (settings?.usagePushThreshold) ? "${str != "" ? "\n" : ""} • Usage Threshold : (${settings?.usagePushThreshold}W)" : ""
+	str += (settings?.minSecBetweenPush) ? "${str != "" ? "\n" : ""} • Minimum Wait: (${settings?.minSecBetweenPush}sec)" : ""
+	str += (settings?.maxSecBetweenPush) ? "${str != "" ? "\n" : ""} • Maximum Wait: (${settings?.maxSecBetweenPush}sec)" : ""
+	return str != "" ? str : null
+}
+
 String getAppNotifDesc() {
 	def str = ""
 	str += settings?.sendMissedPollMsg != false ? "${str != "" ? "\n" : ""} • Missed Poll Alerts: (${strCapitalize(settings?.sendMissedPollMsg ?: "True")})" : ""
 	str += settings?.sendAppUpdateMsg != false ? "${str != "" ? "\n" : ""} • Code Updates: (${strCapitalize(settings?.sendAppUpdateMsg ?: "True")})" : ""
+	return str != "" ? str : null
+}
+
+String getServInfoDesc() {
+	Map rData = state?.nodeServiceInfo	
+	String str = ""
+	String dtstr = ""
+	if(rData?.startupDt) {
+		def dt = rData?.startupDt
+		dtstr += dt?.y ? "${dt?.y}yr${dt?.y > 1 ? "s" : ""}, " : ""
+		dtstr += dt?.mn ? "${dt?.mn}mon${dt?.mn > 1 ? "s" : ""}, " : ""
+		dtstr += dt?.d ? "${dt?.d}day${dt?.d > 1 ? "s" : ""}, " : ""
+		dtstr += dt?.h ? "${dt?.h}hr${dt?.h > 1 ? "s" : ""} " : ""
+		dtstr += dt?.m ? "${dt?.m}min${dt?.m > 1 ? "s" : ""} " : ""
+		dtstr += dt?.s ? "${dt?.s}sec" : ""
+	}
+	str += " ├ IP: (${rData?.ip})"
+	str += "\n ├ Port: (${rData?.port})"
+	str += "\n ├ Version: (v${rData?.version})"
+	str += "\n ${dtstr != "" ? "├" : "└"} Session Events: (${rData?.sessionEvts})"
+	str += dtstr != "" ? "\n └ Uptime: ${dtstr.length() > 20 ? "\n     └ ${dtstr}" : "${dtstr}"}" : ""
 	return str != "" ? str : null
 }
 
