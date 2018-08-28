@@ -1,12 +1,12 @@
 /**
- *	Sense Device
+ *	Sense Monitor Device
  *
- *	Author: Brian Beaird
- *  Last Updated: 2018-08-27 by A. Santilli
+ *	Author: Brian Beaird and Anthony Santilli
+ *  Last Updated: 2018-08-28
  *
  ***************************
  *
- *  Copyright 2018 Brian Beaird
+ *  Copyright 2018 Brian Beaird and Anthony Santilli
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -20,7 +20,10 @@
  */
 
 import java.text.SimpleDateFormat
-String devVersion() { return "0.2.0"}
+String devVersion() { return "0.3.0"}
+String devModified() { return "2018-08-28"}
+String gitAuthor() { return "tonesto7" }
+String getAppImg(imgName) { return "https://raw.githubusercontent.com/${gitAuthor()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
 
 metadata {
     definition (name: "Sense Monitor Device", namespace: "brbeaird", author: "Brian Beaird") {
@@ -131,10 +134,10 @@ def getShortDevName(){
 
 def updateDeviceStatus(Map senseDevice){
     String devName = getShortDevName()
-
     senseDevice?.monitorData?.each { k,v ->
         logger("debug", "$k: $v")
     }
+    
     Float currentPower = senseDevice?.usage?.isNumber() ? senseDevice?.usage as Float : 0.0
     Float oldPower = device.currentState("power")?.floatValue ?: -1
     if (oldPower != currentPower) {
@@ -195,7 +198,7 @@ def updateDeviceStatus(Map senseDevice){
         }
     }
     setOnlineStatus((senseDevice?.monitorData?.online != false))
-    updateDeviceLastRefresh()
+    sendEvent(name: "lastUpdated", value: formatDt(new Date()), display: false , displayed: false)
 }
 
 public setOnlineStatus(Boolean isOnline) {
@@ -217,17 +220,8 @@ Boolean ok2Notify() {
     return (parent?.getOk2Notify())
 }
 
-def updateDeviceLastRefresh(){
-    def finalString = new Date().format('MM/d/yyyy hh:mm:ss a',location.timeZone)
-    sendEvent(name: "lastUpdated", value: finalString, display: false , displayed: false)
-}
-
 private logger(type, msg) {
 	if(type && msg && settings?.showLogs) {
 		log."${type}" "${msg}"
 	}
-}
-
-def showVersion(){
-    return "0.0.1"
 }

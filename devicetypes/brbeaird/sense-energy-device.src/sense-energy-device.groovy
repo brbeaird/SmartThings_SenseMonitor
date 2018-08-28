@@ -1,12 +1,12 @@
 /**
  *	Sense Device
  *
- *	Author: Brian Beaird
- *  Last Updated: 2018-08-27 by A. Santilli
+ *	Author: Brian Beaird and Anthony Santilli
+ *  Last Updated: 2018-08-28
  *
  ***************************
  *
- *  Copyright 2018 Brian Beaird
+ *  Copyright 2018 Brian Beaird and Anthony Santilli
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -20,9 +20,11 @@
  */
 
 import java.text.SimpleDateFormat
-String devVersion() { return "0.2.0"}
-String gitBranch() { return "tonesto7" }
-String getAppImg(imgName) { return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
+String devVersion() { return "0.3.0"}
+String devModified() { return "2018-08-28"}
+String gitAuthor() { return "tonesto7" }
+String getAppImg(imgName) { return "https://raw.githubusercontent.com/${gitAuthor()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
+
 metadata {
     definition (name: "Sense Energy Device", namespace: "brbeaird", author: "Brian Beaird", vid: "generic-power") {
         capability "Power Meter"
@@ -44,6 +46,8 @@ metadata {
         input "prefNotifyOnDelay", "number", required: false, title: "Delay notification until unit has remained ON for this many minutes"
         input "prefNotifyOff", "bool", required: false, title: "Notify when turned off?", description: "Uses the Apps Notification Settings to Choose the destinations"
         input "prefNotifyOffDelay", "number", required: false, title: "Delay notification until unit has remained OFF for this many minutes"
+        input "prefNotifyUsageOverVal", "number", required: false, title: "Notify when usage is over this value?", description: "Uses the Apps Notification Settings to Choose the destinations"
+        input "prefNotifyUsageOverDelay", "number", required: false, title: "Delay notification until unit has remains over for this many minutes"
         input "showLogs", "bool", required: false, title: "Show Debug Logs?", defaultValue: false
     }
 
@@ -145,7 +149,7 @@ def off(){
 
 def checkForOnNotify(){handlePendingNotification(state.lastTurnedOn, state.lastTurnedOff, "On", settings?.prefNotifyOnDelay)}
 def checkForOffNotify(){handlePendingNotification(state.lastTurnedOff, state.lastTurnedOn, "Off", settings?.prefNotifyOffDelay)}
-
+def checkForUsageOverNotify(){handlePendingNotification(state.lastUsageOverOn, state.lastTurnedOff, "On", settings?.prefNotifyOnDelay)}
 
 def handlePendingNotification(lastActivated, lastCanceled, actionName, delayPref){
     //If device has been canceled (opposite switch state activated) while we were waiting, bail out
@@ -185,7 +189,7 @@ def updateDeviceStatus(Map senseDevice){
     //log.debug "Old status was " + oldStatus
     //log.debug "New status is: " + senseDevice.state
 
-    Boolean statusChange = (oldStatus != senseDevice.state)
+    Boolean statusChange = (oldStatus != senseDevice?.state)
 
     //If on/off status has changed
     if (statusChange){
@@ -197,7 +201,7 @@ def updateDeviceStatus(Map senseDevice){
                  if (settings?.prefNotifyOffDelay == null || settings?.prefNotifyOffDelay == 0){
                      parent?.sendMsg("Sense Device Alert", "${devName} turned off!")
                  } else {
-                     logger("debug", "Scheduling OFF push notification!")
+                     logger("debug", "Scheduling OFF Notification!")
                      unschedule(checkForOnNotify)
                      unschedule(checkForOffNotify)
                      runIn(60*settings?.prefNotifyOffDelay, checkForOffNotify)
@@ -208,13 +212,13 @@ def updateDeviceStatus(Map senseDevice){
         }
         if (senseDevice.state == "on"){
             logger("debug", "Change Switch Status to: (ON)")
-            sendEvent(name: "switch", value: "on", display: true, displayed: true, isStateChange: true, descriptionText: device.displayName + " was on")
+            sendEvent(name: "switch", value: "on", display: true, displayed: true, isStateChange: true, descriptionText: device?.displayName + " was on")
             if (settings?.prefNotifyOn && ok2Notify()){
                 //Depending on prefs, send notification immediately or schedule after delay
                 if (settings?.prefNotifyOnDelay == null || settings?.prefNotifyOnDelay == 0){
-                    parent?.sendMsg("Sense Device State Alert", "${devName} turned on!")
+                    parent?.sendMsg("Sense Device Alert", "${devName} turned on!")
                 } else{
-                    logger("debug", "Scheduling ON push notification!")
+                    logger("debug", "Scheduling ON Notification!")
                     unschedule(checkForOnNotify)
                     unschedule(checkForOffNotify)
                     runIn(60*settings?.prefNotifyOnDelay, checkForOnNotify)
@@ -227,6 +231,20 @@ def updateDeviceStatus(Map senseDevice){
 
     Float currentPower = senseDevice?.usage?.isNumber() ? senseDevice?.usage as Float : 0.0
     Float oldPower = device.currentState("power")?.floatValue ?: -1
+    // Boolean usageIsOverAlert = (settings?.prefNotifyUsageOverVal && (currentPower > settings?.prefNotifyUsageOverVal?.toFloat()))
+    // if (settings?.prefNotifyUsageOverVal) {
+    //      if (usageIsOverAlert && ok2Notify()) {
+    //         //Depending on prefs, send notification immediately or schedule after delay
+    //         if (settings?.prefNotifyUsageOverDelay == null || settings?.prefNotifyUsageOverDelay == 0){
+    //             parent?.sendMsg("Sense Device Alert", "${devName} current usage (${current}W) has exceeded the ${settings?.prefNotifyUsageOverVal}W alert setting!")
+    //         } else{
+    //             logger("debug", "Scheduling Usage Over Notification!")
+    //             unschedule(checkForUsageOverNotify)
+    //             runIn(60*settings?.prefNotifyUsageOverDelay, checkForUsageOverNotify)
+    //             state.lastUsageOverOn = now()
+    //         }
+    //      } else { unschedule(checkForUsageOverNotify) }
+    // }
 
     // log.debug "usage: ${senseDevice?.usage} | currentPower: $currentPower | oldPower: ${oldPower}"
     
@@ -265,7 +283,7 @@ def updateDeviceStatus(Map senseDevice){
     // log.debug "currentPower: ${currentPower} | oldPower: ${oldPower}"
     if (oldPower != currentPower) {
         Boolean isUsageChange = true
-        def usageChange = (currentPower - oldPower).abs()
+        def usageChange = (currentPower - oldPower)?.abs()
         if (devName == "Other" && usageChange < 30 && currentPower != 0) { isUsageChange = false }
         if (devName == "TotalUsage" && usageChange < 50 && currentPower != 0) { isUsageChange = false }
 
@@ -275,7 +293,7 @@ def updateDeviceStatus(Map senseDevice){
         }
     }
     setOnlineStatus((senseDevice?.revoked == true) ? false : true)
-    updateDeviceLastRefresh()
+    sendEvent(name: "lastUpdated", value: formatDt(new Date()), display: false , displayed: false)
 }
 
 public setOnlineStatus(Boolean isOnline) {
@@ -297,17 +315,8 @@ Boolean ok2Notify() {
     return (parent?.getOk2Notify())
 }
 
-def updateDeviceLastRefresh() {
-    def finalString = new Date().format('MM/d/yyyy hh:mm:ss a', location.timeZone)
-    sendEvent(name: "lastUpdated", value: finalString, display: false , displayed: false)
-}
-
 private logger(type, msg) {
 	if(type && msg && settings?.showLogs) {
 		log."${type}" "${msg}"
 	}
-}
-
-def showVersion(){
-    return "0.0.1"
 }

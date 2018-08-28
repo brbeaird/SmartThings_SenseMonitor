@@ -1,41 +1,56 @@
 //Required settings
 'use strict';
 
-const serverVersion = "0.2.0";
+const serverVersion = "0.3.0";
 //Libraries
+const http = require('http');
 const sense = require('unofficial-sense'); //Temporarily using our own version until pull requests are merged in
 const request = require("request-promise");
+const express = require('express');
+const os = require('os');
+const app = express();
+const appServer = http.createServer(app);
+
 
 //Required Setting (Set in Config.js)
 const config = require('./config');
 const email = config.email;
 const password = config.password;
-const smartThingsHubIP = config.smartThingsHubIP;
+var smartThingsHubIP = config.smartThingsHubIP;
 const smartThingsAppId = config.smartThingsAppId || undefined;
+const callbackPort = config.callbackPort || 9021;
 
 //Optional Settings (Set in Config.js)
 /**************************************************************************************************************************************
     This process opens up a websocket connection to Sense; we see realtime data from Sense every couple seconds.
     While parsing that data, we watch for significant changes so we can push to SmartThings only when relevant to avoid spamming the hub.
-    At baseline, we send an update at least once every minute (maximumSecondsBetweenPush).
-    We do NOT send updates less than 10 seconds apart (minimumSecondsBetweenPush).
+    At baseline, we send an update at least once every minute (maxSecBetweenPush).
+    We do NOT send updates less than 10 seconds apart (minSecBetweenPush).
     We send an update when at least one device has turned on or off.
-    We send an update when power usage on a device has changed by at least 200 watts (usageThreshold).
+    We send an update when power usage on a device has changed by at least 200 watts (usagePushThreshold).
 ***************************************************************************************************************************************/
-const autoReconnect = config.autoReconnect || true;
-const usageThreshold = config.usageThreshold || 200; //Change in usage that determines when a special push to ST is made
-const maximumSecondsBetweenPush = config.maximumSecondsBetweenPush || 60; //Maximum number of seconds between data pushes to ST
-const minimumSecondsBetweenPush = config.minimumSecondsBetweenPush || 10; //Minimum number of seconds between data pushes to ST
+var autoReconnect = config.autoReconnect || true;
+var usagePushThreshold = 200; //Change in usage that determines when a special push to ST is made
+var maxSecBetweenPush = 60; //Maximum number of seconds between data pushes to ST
+var minSecBetweenPush = 10; //Minimum number of seconds between data pushes to ST
 
 //Global Variables
 var reconnectPending = false;
 var deviceList = {};
+var deviceFilter = [];
+var serviceStartTime = Date.now(); //Returns time in millis
+var eventCount = 0; //Keeps a tally of how many times data was sent to ST in the running sessions
+
 var lastPush = new Date();
 lastPush.setDate(lastPush.getDate() - 1);
-// var prevTotalUsage = 0;
+
+function tsLogger(msg) {
+    let dt = new Date().toLocaleString();
+    console.log(dt + ' | ' + msg);
+}
 
 function addDevice(data) {
-    console.log("Adding New Device: (" + data.name + ") to DevicesList...");
+    tsLogger("Adding New Device: (" + data.name + ") to DevicesList...");
     if (data.id === "SenseMonitor") {
         deviceList[data.id] = data;
     } else {
@@ -64,7 +79,61 @@ function addDevice(data) {
     }
 }
 
-function getData() {
+function exitHandler(options, err) {
+    console.log('exitHandler: (PID: ' + process.pid + ')', options, err);
+    if (options.cleanup) {
+        tsLogger('exitHandler: ', 'ClosedByUserConsole');
+    } else if (err) {
+        tsLogger('exitHandler error', err);
+        if (options.exit) process.exit(1);
+    }
+    process.exit();
+}
+
+function getIPAddress() {
+    var interfaces = os.networkInterfaces();
+    for (var devName in interfaces) {
+        var iface = interfaces[devName];
+        for (var i = 0; i < iface.length; i++) {
+            var alias = iface[i];
+            if (alias.family === 'IPv4' && alias.address !== '127.0.0.1' && !alias.internal)
+                return alias.address;
+        }
+    }
+    return '0.0.0.0';
+}
+
+function getServiceUptime() {
+    var now = Date.now();
+    var diff = (now - serviceStartTime) / 1000;
+    //logger.debug("diff: "+ diff);
+    return getHostUptimeStr(diff);
+}
+
+function getHostUptimeStr(time) {
+    var years = Math.floor(time / 31536000);
+    time -= years * 31536000;
+    var months = Math.floor(time / 31536000);
+    time -= months * 2592000;
+    var days = Math.floor(time / 86400);
+    time -= days * 86400;
+    var hours = Math.floor(time / 3600);
+    time -= hours * 3600;
+    var minutes = Math.floor(time / 60);
+    time -= minutes * 60;
+    var seconds = parseInt(time % 60, 10);
+    return {
+        'y': years,
+        'mn': months,
+        'd': days,
+        'h': hours,
+        'm': minutes,
+        's': seconds
+    };
+    //return (years + 'y, ' + days + 'd, ' + hours + 'h:' + (minutes < 10 ? '0' + minutes : minutes) + 'm:' + (seconds < 10 ? '0' + seconds : seconds) +'s');
+}
+
+function startSenseStream() {
     //On initial load, get basic list of devices
     sense({
             email: email,
@@ -72,20 +141,10 @@ function getData() {
             verbose: false
         })
         .then((mySense) => {
-                console.log("Successfully Authenticated with Sense! Data is Incoming!");
+                tsLogger("Successfully Authenticated with Sense! Data is Incoming!");
                 reconnectPending = false;
-                mySense.getDevices().then(devices => {
-                    // console.log("devices:", devices);
-                    for (let dev of devices) {
-                        addDevice(dev);
-                    }
-                });
-
+                getSenseDevices();
                 updateMonitorInfo();
-
-                // mySense.getTimeline().then(timeline => {
-                //     console.log('TimeLine:', timeline);
-                // });
 
                 //Handle websocket data updates
                 mySense.events.on('data', processData);
@@ -104,9 +163,13 @@ function getData() {
                     });
                 });
 
-                function tsLogger(msg) {
-                    let dt = new Date().toLocaleString();
-                    console.log(dt + ' | ' + msg);
+                function getSenseDevices() {
+                    mySense.getDevices().then(devices => {
+                        // console.log("devices:", devices);
+                        for (let dev of devices) {
+                            addDevice(dev);
+                        }
+                    });
                 }
 
                 function updateMonitorInfo(usageVal = 0, otherData = {}) {
@@ -125,7 +188,6 @@ function getData() {
                                 wifi_ssid: monitor.monitor_info.ssid || "",
                                 version: monitor.monitor_info.version || ""
                             }
-
                         };
                         if (Object.keys(otherData).length) {
                             for (const key in otherData) {
@@ -156,7 +218,7 @@ function getData() {
                     if (autoReconnect && !reconnectPending) {
                         reconnectPending = true;
                         console.log("Reconnecting...");
-                        getData();
+                        startSenseStream();
                     }
                 }
 
@@ -209,7 +271,7 @@ function getData() {
                                         deviceList[dev.id].recentlyChanged = true;
                                     }
 
-                                    if (prevUsage !== -1 && Math.abs(usageDelta) > usageThreshold) {
+                                    if (prevUsage !== -1 && Math.abs(usageDelta) > usagePushThreshold) {
                                         tsLogger(dev.name + " usage changed by " + usageDelta);
                                         updateNow = true;
                                     }
@@ -261,12 +323,13 @@ function getData() {
 
                             let secondsSinceLastPush = (Date.now() - lastPush.getTime()) / 1000;
                             // console.log('devArray: ', devArray);
+                            // console.log('lastPush: ', secondsSinceLastPush, ' minSecs: ', minSecBetweenPush);
                             //Override updateNow if it's been less than 15 seconds since our last push
-                            if (secondsSinceLastPush <= minimumSecondsBetweenPush) {
+                            if (secondsSinceLastPush <= minSecBetweenPush) {
                                 updateNow = false;
                             }
 
-                            if (updateNow || secondsSinceLastPush >= maximumSecondsBetweenPush) {
+                            if (updateNow || secondsSinceLastPush >= maxSecBetweenPush) {
                                 //console.log("Sending data to SmartThings hub");
 
                                 let otherMonData = {};
@@ -284,19 +347,31 @@ function getData() {
                                 }
 
                                 otherMonData.hz = convUsage(data.payload.hz, 0);
-                                otherMonData.serverVersion = serverVersion;
                                 updateMonitorInfo(convUsage(data.payload.w) || 0, otherMonData);
                                 lastPush = new Date();
                                 let options = {
                                     method: 'POST',
                                     uri: 'http://' + smartThingsHubIP + ':39500/event',
-                                    body: {
-                                        "devices": devArray
-                                    },
                                     headers: {
                                         'source': 'STSense'
                                     },
-                                    json: true // Automatically stringifies  the body to JSON
+                                    body: {
+                                        'devices': devArray,
+                                        'serviceInfo': {
+                                            'version': serverVersion,
+                                            'sessionEvts': eventCount,
+                                            'startupDt': getServiceUptime(),
+                                            'ip': getIPAddress(),
+                                            'port': callbackPort,
+                                            'config': {
+                                                'minSecBetweenPush': minSecBetweenPush,
+                                                'maxSecBetweenPush': maxSecBetweenPush,
+                                                'usagePushThreshold': usagePushThreshold,
+                                                'smartThingsHubIP': smartThingsHubIP
+                                            }
+                                        }
+                                    },
+                                    json: true
                                 };
 
                                 if (smartThingsAppId !== undefined || smartThingsAppId !== '') {
@@ -305,7 +380,8 @@ function getData() {
                                 //Send to SmartThings!
                                 request(options)
                                     .then(function() {
-                                        tsLogger('**Sent Data for (' + devArray.length + ') Devices to SmartThings Hub Successfully!**');
+                                        eventCount++;
+                                        tsLogger('**Sent Data for (' + devArray.length + ') Devices to SmartThings Hub Successfully! | Last Updated: (' + secondsSinceLastPush + 'sec)**');
                                     })
                                     .catch(function(err) {
                                         console.log("ERROR: Unable to connect to SmartThings Hub: " + err.message);
@@ -321,5 +397,38 @@ function getData() {
             });
 }
 
-// Runs this whole thing
-getData();
+
+function startWebServer() {
+    app.set('port', callbackPort);
+    appServer.listen(callbackPort, function() {
+        tsLogger('Sense Monitor Service (v' + serverVersion + ') is Running at (IP: ' + getIPAddress() + ' | Port: ' + callbackPort + ') | ProcessId: ' + process.pid);
+    });
+    app.post('/updateSettings', function(req, res) {
+        tsLogger('SmartThings Sent a Setting Update... | PID: ' + process.pid);
+        if (req.headers.minsecbetweenpush !== undefined && parseInt(req.headers.minsecbetweenpush) !== minSecBetweenPush) {
+            tsLogger('updateSetting | minSecBetweenPush | new: ' + req.headers.minsecbetweenpush + ' | old: ' + minSecBetweenPush);
+            minSecBetweenPush = parseInt(req.headers.minsecbetweenpush);
+        }
+        if (req.headers.maxsecbetweenpush !== undefined && parseInt(req.headers.maxsecbetweenpush) !== maxSecBetweenPush) {
+            tsLogger('updateSetting | maxSecBetweenPush | new: ' + req.headers.maxsecbetweenpush + ' | old: ' + maxSecBetweenPush);
+            maxSecBetweenPush = parseInt(req.headers.maxsecbetweenpush);
+        }
+        if (req.headers.usagepushthreshold !== undefined && parseInt(req.headers.usagepushthreshold) !== usagePushThreshold) {
+            tsLogger('updateSetting | usagePushThreshold | new: ' + req.headers.usagepushthreshold + ' | old: ' + usagePushThreshold);
+            usagePushThreshold = parseInt(req.headers.usagepushthreshold);
+        }
+        if (req.headers.smartthingshubip !== undefined && req.headers.smartthingshubip !== smartThingsHubIP) {
+            tsLogger('updateSetting | smartThingsHubIP | new: ' + req.headers.smartthingshubip + ' | old: ' + smartThingsHubIP);
+            smartThingsHubIP = req.headers.smartthingshubip;
+        }
+    });
+    process.stdin.resume(); //so the program will not close instantly
+    //do something when app is closing
+    process.on('exit', exitHandler.bind(null, {
+        exit: true
+    }));
+}
+
+// This starts the Stream and Webserver
+startSenseStream();
+startWebServer();

@@ -1,11 +1,11 @@
 /**
  *	Sense Monitor SmartApp
  *
- *	Author: Brian Beaird
- *  Last Updated: 2018-08-27 (By A. Santilli)
+ *	Author: Brian Beaird and Anthony Santilli
+ *  Last Updated: 2018-08-28
  *
  *
- *  Copyright 2018 Brian Beaird
+ *  Copyright 2018 Brian Beaird and Anthony Santilli
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -20,10 +20,18 @@
 import java.text.SimpleDateFormat
 include 'asynchttp_v1'
 
-String appVersion() { return "0.2.0" }
+String appVersion() { return "0.3.0" }
 String appAuthor() { return "Brian Beaird" }
 String gitBranch() { return "tonesto7" }
 String getAppImg(imgName) 	{ return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
+Map minVersions() { //These define the minimum versions of code this app will work with.
+	return [
+		monitorDevice: 030,
+		energyDevice: 030,
+		server: 030
+	]
+}
+
 
 definition(
 	name: "Sense Monitor App",
@@ -40,9 +48,12 @@ preferences {
 	// page(name: "prefConfigure", title: "Sense")
 	page(name: "mainPage")
 	page(name: "notifPrefPage")
+	page(name: "servPrefPage")
 	page(name: "setNotificationTimePage")
 	page(name: "uninstallPage")
 }
+
+
 
 def appInfoSect(sect=true)	{
 	def str = ""
@@ -79,6 +90,10 @@ def mainPage() {
 			def t0 = getAppNotifConfDesc()
 			href "notifPrefPage", title: "App and Device\nNotifications", description: (t0 ? "${t0}\n\nTap to modify" : "Tap to configure"), state: (t0 ? "complete" : null), image: getAppImg("notification2.png")
 		}
+		section("Sense Service:") {
+			def t0 = ""
+			href "servPrefPage", title: "Sense Service\nPreferences", description: (t0 ? "${t0}\n\nTap to modify" : "Tap to configure"), state: (t0 ? "complete" : null), image: getAppImg("settings.png")
+		}
 		section ("Application Logs") {
 			input (name: "appDebug", type: "bool", title: "Show App Logs in the IDE?", required: false, defaultValue: false, submitOnChange: true, image: getAppImg("debug.png"))
 		}
@@ -99,6 +114,20 @@ Map getDeviceList(isInputEnum=false, hideDefaults=true) {
 		} else { devMap[key] = val }
 	}
 	return isInputEnum ? (devMap?.size() ? devMap?.collectEntries { [(it?.key):it?.value?.name] } : devMap) : devMap
+}
+
+def servPrefPage() {
+	dynamicPage(name: "servPrefPage", install: false) {
+		section("Hub Selection:") {
+			input(name: "stHub", type: "hub", title: "Select Local Hub", description: "This will help to make sure ip changes are sent to service.", submitOnChange: true, image: getAppImg("hub_icon.png"))
+		}
+		section("Service Push Settings") {
+			input (name: "minSecBetweenPush", type: "number", title: "Minimum Wait Between Updates", description: "In Seconds...", required: false, defaultValue: 10, submitOnChange: true, image: getAppImg("delay_time.png"))
+			input (name: "maxSecBetweenPush", type: "number", title: "Maximum Wait Between Updates", description: "In Seconds...", required: false, defaultValue: 60, submitOnChange: true, image: getAppImg("delay_time.png"))
+			input (name: "usagePushThreshold", type: "number", title: "Usage Change to Trigger Update", description: "In Watts...", required: false, defaultValue: 200, submitOnChange: true, image: getAppImg("delay_time.png"))
+			paragraph title: "NOTICE", "To send these changes to the service you must press Done all the way out of the smartapp"
+		}
+	}
 }
 
 def notifPrefPage() {
@@ -207,9 +236,9 @@ def installed() {
 
 def updated() {
 	log.debug "Updated with settings: ${settings}"
-	if (state?.previousVersion != state?.thisSmartAppVersion){
-		getVersionInfo(state?.previousVersion, state?.thisSmartAppVersion);
-	}
+	// if (state?.previousVersion != state?.thisSmartAppVersion){
+	// 	getVersionInfo(state?.previousVersion, state?.thisSmartAppVersion);
+	// }
 	state?.isInstalled = true
 	unsubscribe()
 	initialize()
@@ -228,6 +257,7 @@ def initialize() {
 	subscribe(location, null, lanEventHandler, [filterEvents:false])
 	stateCleanup()
 	updCodeVerMap()
+	runIn(5, "senseServiceUpdate", [overwrite: true])
 }
 
 private stateCleanup() {
@@ -237,8 +267,8 @@ private stateCleanup() {
 
 def onAppTouch(evt) {
 	// log.trace "appTouch..."
-	// sendMsg("Info", "Push Notification Test Successful. Notifications Enabled for ${app?.label}", true)
 	notificationCheck()
+	senseServiceUpdate()
 }
 
 private updCodeVerMap() {
@@ -270,21 +300,30 @@ def lanEventHandler(evt) {
 
 	Map result = [:]
 	if (msg?.body != null) {
-		try{
+		try {
 			def slurper = new groovy.json.JsonSlurper()
 			result = slurper?.parseText(msg?.body)
-			//log.debug result
-		} catch (e){
+		} catch (e) {
 			log.debug "FYI - got a Sense response, but it's apparently not JSON. Error: " + e + ". Body: " + msg?.body
 			return 1
+		}
+
+		//Check for minimum versions before processing
+		Boolean updRequired = false
+		List updRequiredItems = []
+		["server":"Sense Server", "monitorDevice":"Monitor Device", "energyDevice":"Energy Device"]?.each { k,v->
+			Map codeVers = state?.codeVersions
+			if(codeVers && codeVers[k as String] && (versionStr2Int(codeVers[k as String]) < minVersions()[k as String])) { updRequired = true; updRequiredItems?.push("$v"); }
 		}
 
 		List ignoreTheseDevs = settings?.senseDeviceFilter ?: []
 		if (result?.devices) {
 			//log.debug result.versionInfo.SmartApp
 			Map senseDeviceMap = [:]
+			
 			result?.devices?.each { senseDevice ->
 				Boolean isMonitor = (senseDevice?.id == "SenseMonitor")
+				
 				senseDeviceMap[senseDevice?.id] = senseDevice
 				// log.debug "senseDevice(${senseDevice.name}): ${senseDevice}"
 				if(senseDevice?.id in ignoreTheseDevs) { 
@@ -292,7 +331,6 @@ def lanEventHandler(evt) {
 					return 
 				}
 				// logger("debug", "${senseDevice.name} | State: (${senseDevice?.state?.toString().toUpperCase()}) | Usage: ${senseDevice?.usage}W")
-				//def senseDevice = result.devices[0]
 				def dni = [ app?.id, (!isMonitor ? "senseDevice" : "senseMonitor"), senseDevice?.id].join('|')
 				//log.debug "device DNI will be: " + dni + " for " + senseDevice.name
 				def childDevice = getChildDevice(dni)
@@ -300,41 +338,87 @@ def lanEventHandler(evt) {
 				def childDeviceAttrib = [:]
 				def fullName = !isMonitor ? "Sense-" + senseDevice?.name : "Sense Monitor"
 				def childHandlerName = isMonitor ? "Sense Monitor Device" : "Sense Energy Device"
-				if (!childDevice) {
-					log.debug "name will be: " + fullName
-					//childDeviceAttrib = ["name": senseDevice.name, "completedSetup": true]
-					childDeviceAttrib = [name: childHandlerName, label: fullName, completedSetup: true]
-					try{
-						if(isMonitor) {
-							log.debug "Creating NEW Sense Monitor Device: " + fullName
-							childDevice = addChildDevice("brbeaird", "Sense Monitor Device", dni, null, childDeviceAttrib)
-						} else {
-							log.debug "Creating NEW Sense Energy Device: " + fullName
-							childDevice = addChildDevice("brbeaird", "Sense Energy Device", dni, null, childDeviceAttrib)
+				if(!updRequired) {
+					if (!childDevice) {
+						log.debug "name will be: " + fullName
+						//childDeviceAttrib = ["name": senseDevice.name, "completedSetup": true]
+						childDeviceAttrib = [name: childHandlerName, label: fullName, completedSetup: true]
+						try{
+							if(isMonitor) {
+								log.debug "Creating NEW Sense Monitor Device: " + fullName
+								childDevice = addChildDevice("brbeaird", "Sense Monitor Device", dni, null, childDeviceAttrib)
+							} else {
+								log.debug "Creating NEW Sense Energy Device: " + fullName
+								childDevice = addChildDevice("brbeaird", "Sense Energy Device", dni, null, childDeviceAttrib)
+							}
+						} catch(physicalgraph.app.exception.UnknownDeviceTypeException ex) {
+							log.error "AddDevice Error! ", ex
 						}
-						childDevice?.updateDeviceStatus(senseDevice)
-					} catch(physicalgraph.app.exception.UnknownDeviceTypeException ex) {
-						log.error "AddDevice Error! ", ex
-					}
-				} else {
-					//Check and see if name needs a refresh
-					if (settings?.autoRenameDevices != false && childDevice?.name != childHandlerName || childDevice?.label != fullName) {
-						log.debug ("Updating device name (old label was " + childDevice?.label + " | old name was " + childDevice?.name + " new hotness: " + fullName)
-						childDevice?.name = childHandlerName
-						childDevice?.label = fullName
+					} else {
+						//Check and see if name needs a refresh
+						if (settings?.autoRenameDevices != false && childDevice?.name != childHandlerName || childDevice?.label != fullName) {
+							log.debug ("Updating device name (old label was " + childDevice?.label + " | old name was " + childDevice?.name + " new hotness: " + fullName)
+							childDevice?.name = childHandlerName
+							childDevice?.label = fullName
+						}
 					}
 					childDevice?.updateDeviceStatus(senseDevice)
 				}
-				if(isMonitor) {
-					modCodeVerMap("monitorDevice", childDevice?.devVersion()) // Used for the Updater Notifiers
-					modCodeVerMap("server", senseDevice?.monitorData?.serverVersion) // Used for the Updater Notifiers
-				} else {
-					modCodeVerMap("energyDevice", childDevice?.devVersion()) // Used for the Updater Notifiers
-				}
+				modCodeVerMap((isMonitor ? "monitorDevice" : "energyDevice"), childDevice?.devVersion()) // Update device versions in codeVersion state Map
 				state?.lastDevDataUpd = getDtNow()
 			}
 			state?.senseDeviceMap = senseDeviceMap
 		}
+		if(result?.serviceInfo) {
+			Map srvcInfo = result?.serviceInfo
+			state?.nodeServiceInfo = srvcInfo
+			Boolean sendSetUpd = false
+			if(srvcInfo?.config && srvcInfo?.config?.size()) {
+				srvcInfo?.config?.each { k,v->
+					if(settings?.containsKey(k as String)) {
+						if(settings[k as String] != v) { 
+							sendSetUpd = true 
+							log.debug "config($k) | Service: $v | App: ${settings[k as String]} | result: ${(srvVal != appVal)} | sendUpdate: ${sendSetUpd}"
+						}
+					}
+				}
+			}
+			modCodeVerMap("server", srvcInfo?.version)
+			if(sendSetUpd) { senseServiceUpdate() }
+		}
+		if(updRequired) {
+			log.error "CODE UPDATES REQUIRED:  Sense Monitor Integration will not function until the following items are ALL Updated ${updRequiredItems}..."
+			appUpdateNotify()
+		}
+	}
+}
+
+private senseServiceUpdate() {
+	// log.trace("senseServiceUpdate")
+	String ip = state?.nodeServiceInfo?.ip
+	String port = state?.nodeServiceInfo?.port
+	String host = ip && port ? "${ip}:${port}" : null
+	String smartThingsHubIp = settings?.stHub?.getLocalIP()
+	if(!host) { return }
+	
+	logger("trace", "senseServiceUpdate host: ${host}")
+	try {
+		def hubAction = new physicalgraph.device.HubAction(
+			method: "POST",
+			headers: [
+				"HOST": host,
+				"smartThingsHubIp": "${smartThingsHubIp}",
+				"usagePushThreshold": settings?.usagePushThreshold,
+				"maxSecBetweenPush": settings?.maxSecBetweenPush,
+				"minSecBetweenPush": settings?.minSecBetweenPush
+			],
+			path: "/updateSettings",
+			body: ""
+		)
+		sendHubCommand(hubAction)
+	}
+	catch (Exception e) {
+		log.error "senseServiceUpdate Exception $e on $hubAction"
 	}
 }
 
@@ -379,7 +463,7 @@ private appUpdateNotify() {
 	Boolean monDevUpd = isMonitorDevUpdateAvail()
 	Boolean enerDevUpd = isEnergyDevUpdateAvail()
 	Boolean servUpd = isServerUpdateAvail()
-	logger("trace", "appUpdateNotify() | on: (${on}) | appUpd: (${appUpd}) | monDevUpd: (${monDevUpd}) | enerDevUpd: (${enerDevUpd}) | servUpd: (${servUpd}) | getLastUpdMsgSec: ${getLastUpdMsgSec()} | state?.updNotifyWaitVal: ${state?.updNotifyWaitVal}")
+	// logger("trace", "appUpdateNotify() | on: (${on}) | appUpd: (${appUpd}) | monDevUpd: (${monDevUpd}) | enerDevUpd: (${enerDevUpd}) | servUpd: (${servUpd}) | getLastUpdMsgSec: ${getLastUpdMsgSec()} | state?.updNotifyWaitVal: ${state?.updNotifyWaitVal}")
 	if(getLastUpdMsgSec() > state?.updNotifyWaitVal.toInteger()) {
 		if(appUpd || monDevUpd || enerDevUpd || servUpd) {
 			def str = ""
@@ -556,6 +640,8 @@ Boolean isServerUpdateAvail() {
 	return false
 }
 
+Integer versionStr2Int(str) { return str ? str.toString()?.replaceAll("\\.", "")?.toInteger() : null }
+
 def versionCheck(){
 	state.versionWarning = ""
 	state.thisDeviceVersion = ""
@@ -565,7 +651,7 @@ def versionCheck(){
 
 	if (childDevs.size() > 0){
 		childExists = true
-		state.thisDeviceVersion = childDevs[0].showVersion()
+		state.thisDeviceVersion = childDevs[0].devVersion()
 		logger("debug", "child version found: " + state?.thisDeviceVersion)
 	}
 
@@ -606,11 +692,7 @@ private responseHandlerMethod(response, data) {
 
 private checkVersionData(now = false) { //This reads a JSON file from GitHub with version numbers
 	if (now || !state?.versionData || (getLastVerUpdSec() > (3600*6))) {
-		if(canSchedule()) {
-			getVersionData()
-		} else {
-			runIn(45, "getVersionData", [overwrite: true])
-		}
+		getVersionData()
 	}
 }
 
@@ -686,8 +768,8 @@ String getAppNotifConfDesc() {
 		str += (settings?.pushoverEnabled && settings?.pushoverPriority) ? "${str != "" ? "\n" : ""} • Priority: (${settings?.pushoverPriority})" : ""
 		str += (settings?.pushoverEnabled && settings?.pushoverSound) ? "${str != "" ? "\n" : ""} • Sound: (${settings?.pushoverSound})" : ""
 		str += (settings?.phone) ? "${str != "" ? "\n" : ""}Sending via: (SMS)" : ""
-		str += (ap != null) ? "${str != "" ? "\n" : ""}\nEnabled Alerts:\n${ap}" : ""
-		str += (nd != null) ? "${str != "" ? "\n" : ""}\nAlert Restrictions:\n${nd}" : ""
+		str += (ap) ? "${str != "" ? "\n" : ""}Enabled Alerts:\n${ap}" : ""
+		str += (ap && nd) ? "${str != "" ? "\n" : ""}\nAlert Restrictions:\n${nd}" : ""
 	}
 	return str != "" ? str : null
 }
