@@ -39,7 +39,7 @@ var reconnectPending = false;
 var deviceList = {};
 var serviceStartTime = Date.now(); //Returns time in millis
 var eventCount = 0; //Keeps a tally of how many times data was sent to ST in the running sessions
-const arrSum = arr => arr.reduce((a, b) => Math.abs(a) + Math.abs(b), 0);
+// const arrSum = arr => arr.reduce((a, b) => Math.abs(a) + Math.abs(b), 0);
 
 var lastPush = new Date();
 lastPush.setDate(lastPush.getDate() - 1);
@@ -269,7 +269,7 @@ function startSenseStream() {
 
                                 if (dev.name !== "Other") {
                                     if (prevState !== "on" && prevState !== "unknown") {
-                                        tsLogger(dev.name + " turned on!");
+                                        tsLogger('Device State Changed: ' + dev.name + " turned ON!");
                                         updateNow = true;
                                         deviceList[dev.id].recentlyChanged = true;
                                     }
@@ -312,7 +312,7 @@ function startSenseStream() {
                                 if (key !== "SenseMonitor") {
                                     if (deviceList[key].currentlyOn === false) {
                                         if (deviceList[key].name !== "Other" && deviceList[key].state !== 'off' && deviceList[key].state !== "unknown") {
-                                            tsLogger(deviceList[key].name + " turned off!");
+                                            tsLogger('Device State Changed: ' + deviceList[key].name + " turned OFF!");
                                             updateNow = true;
                                             deviceList[key].recentlyChanged = true;
                                         }
@@ -324,12 +324,11 @@ function startSenseStream() {
                                 }
                                 devArray.push(deviceList[key]);
                             });
-                            // console.log('devArray: ', devArray);
 
                             let secondsSinceLastPush = (Date.now() - lastPush.getTime()) / 1000;
                             // console.log('lastPush: ', secondsSinceLastPush, ' minSecs: ', minSecBetweenPush);
 
-                            //Override updateNow if it's been less than 15 seconds since our last push
+                            // Override updateNow if it's been less than 15 seconds since our last push
                             if (secondsSinceLastPush <= minSecBetweenPush) {
                                 updateNow = false;
                             }
@@ -384,7 +383,7 @@ function startSenseStream() {
                                 request(options)
                                     .then(function() {
                                         eventCount++;
-                                        tsLogger('**Data for (' + devArray.length + ') Devices has been Sent to SmartThings! | Usage: (' + convUsage(data.payload.w) + 'W) | Last Updated: (' + secondsSinceLastPush + 'sec)**');
+                                        tsLogger('** Sent (' + devArray.length + ') Devices to SmartThings! | Usage: (' + convUsage(data.payload.w) + 'W) | Last Updated: (' + convUsage(secondsSinceLastPush, 1) + 'sec) **');
                                     })
                                     .catch(function(err) {
                                         console.log("ERROR: Unable to connect to SmartThings Hub: " + err.message);
@@ -407,21 +406,21 @@ function startWebServer() {
         tsLogger('Sense Monitor Service (v' + serverVersion + ') is Running at (IP: ' + getIPAddress() + ' | Port: ' + callbackPort + ') | ProcessId: ' + process.pid);
     });
     app.post('/updateSettings', function(req, res) {
-        tsLogger('SmartThings Sent a Setting Update... | PID: ' + process.pid);
+        tsLogger('** Settings Update Received from SmartThings **');
         if (req.headers.minsecbetweenpush !== undefined && parseInt(req.headers.minsecbetweenpush) !== minSecBetweenPush) {
-            tsLogger('updateSetting | minSecBetweenPush | new: ' + req.headers.minsecbetweenpush + ' | old: ' + minSecBetweenPush);
+            tsLogger('++ Changed Setting (minSecBetweenPush) | New Value: (' + req.headers.minsecbetweenpush + ') | Old Value: (' + minSecBetweenPush + ') ++');
             minSecBetweenPush = parseInt(req.headers.minsecbetweenpush);
         }
         if (req.headers.maxsecbetweenpush !== undefined && parseInt(req.headers.maxsecbetweenpush) !== maxSecBetweenPush) {
-            tsLogger('updateSetting | maxSecBetweenPush | new: ' + req.headers.maxsecbetweenpush + ' | old: ' + maxSecBetweenPush);
+            tsLogger('++ Changed Setting (maxSecBetweenPush) | New Value: (' + req.headers.maxsecbetweenpush + ') | Old Value: (' + maxSecBetweenPush + ') ++');
             maxSecBetweenPush = parseInt(req.headers.maxsecbetweenpush);
         }
         if (req.headers.usagepushthreshold !== undefined && parseInt(req.headers.usagepushthreshold) !== usagePushThreshold) {
-            tsLogger('updateSetting | usagePushThreshold | new: ' + req.headers.usagepushthreshold + ' | old: ' + usagePushThreshold);
+            tsLogger('++ Changed Setting (usagePushThreshold) | New Value: (' + req.headers.usagepushthreshold + ') | Old Value: (' + usagePushThreshold + ') ++');
             usagePushThreshold = parseInt(req.headers.usagepushthreshold);
         }
         if (req.headers.smartthingshubip !== undefined && req.headers.smartthingshubip !== smartThingsHubIP) {
-            tsLogger('updateSetting | smartThingsHubIP | new: ' + req.headers.smartthingshubip + ' | old: ' + smartThingsHubIP);
+            tsLogger('++ Changed Setting (smartThingsHubIP) | New Value: (' + req.headers.smartthingshubip + ') | Old Value: (' + smartThingsHubIP + ') ++');
             smartThingsHubIP = req.headers.smartthingshubip;
         }
     });

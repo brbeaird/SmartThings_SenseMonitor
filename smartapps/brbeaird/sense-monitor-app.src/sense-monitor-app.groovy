@@ -393,7 +393,7 @@ def lanEventHandler(evt) {
 				state?.lastDevDataUpd = getDtNow()
 				
 			}
-			// log.debug "Total Usage: ${totalUse} | Array: ${totalUsageArr?.sum()}"
+			// log.debug "Total Usage: ${totalUse} | Array: ${totalUsageArr?.sum()} | Frame: ${result?.frameId}"
 			state?.senseDeviceMap = senseDeviceMap
 		}
 		if(result?.serviceInfo) {
