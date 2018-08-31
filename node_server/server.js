@@ -90,6 +90,20 @@ function exitHandler(options, err) {
     process.exit();
 }
 
+var gracefulStopNoMsg = function() {
+    tsLogger('gracefulStopNoMsg: ', process.pid);
+    console.log('graceful setting timeout for PID: ' + process.pid);
+    setTimeout(function() {
+        console.error("Could not close connections in time, forcefully shutting down");
+        process.exit(1);
+    }, 2 * 1000);
+};
+
+var gracefulStop = function() {
+    tsLogger('gracefulStop: ', 'ClosedByNodeService ' + process.pid);
+    let a = gracefulStopNoMsg();
+};
+
 function getIPAddress() {
     var interfaces = os.networkInterfaces();
     for (var devName in interfaces) {
@@ -429,6 +443,15 @@ function startWebServer() {
     process.on('exit', exitHandler.bind(null, {
         exit: true
     }));
+
+    //catches ctrl+c event
+    process.on('SIGINT', gracefulStop);
+
+    process.on('SIGUSR2', gracefulStop);
+
+    process.on('SIGHUP', gracefulStop);
+
+    process.on('SIGTERM', gracefulStop);
 }
 
 // This starts the Stream and Webserver
