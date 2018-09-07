@@ -344,6 +344,7 @@ def lanEventHandler(evt) {
 			Map senseDeviceMap = [:]
 			// List totalUsageArr = []
 			// def totalUse = 0
+			log.debug "Updating (${result?.devices?.size()}) Sense Devices..."
 			result?.devices?.each { senseDevice ->
 				Boolean isMonitor = (senseDevice?.id == "SenseMonitor")
 				
