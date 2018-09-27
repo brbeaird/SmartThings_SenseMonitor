@@ -2,7 +2,7 @@
  *	Sense Monitor SmartApp
  *
  *	Author: Brian Beaird and Anthony Santilli
- *  Last Updated: 2018-08-28
+ *  Last Updated: 2018-09-27
  *
  *
  *  Copyright 2018 Brian Beaird and Anthony Santilli
@@ -20,7 +20,7 @@
 import java.text.SimpleDateFormat
 include 'asynchttp_v1'
 
-String appVersion() { return "0.3.0" }
+String appVersion() { return "0.3.1" }
 String appAuthor() { return "Brian Beaird" }
 String gitBranch() { return "tonesto7" }
 String getAppImg(imgName) 	{ return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
@@ -35,7 +35,7 @@ Map minVersions() { //These define the minimum versions of code this app will wo
 definition(
 	name: "Sense Monitor App",
 	namespace: "brbeaird",
-	author: "Brian Beaird",
+	author: "Anthony Santilli",
 	description: "Connects SmartThings with Sense",
 	category: "My Apps",
 	iconUrl: "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/sense.1x.png",
@@ -61,14 +61,6 @@ def appInfoSect(sect=true)	{
 }
 
 def mainPage() {
-	
-	// state.previousVersion = state.thisSmartAppVersion
-	// if (state.previousVersion == null){
-	//     state.previousVersion = 0;
-	// }
-	// state.thisSmartAppVersion = "0.1.0"
-	// getVersionInfo(0, 0)
-	
 	checkVersionData(true)
 	Boolean newInstall = !state?.isInstalled
 	dynamicPage(name: "mainPage", nextPage: (!newInstall ? "" : "servPrefPage"), uninstall: false, install: !newInstall) {
@@ -280,6 +272,7 @@ def initialize() {
 	stateCleanup()
 	updCodeVerMap()
 	runIn(5, "senseServiceUpdate", [overwrite: true])
+	runIn(3, "reInitDevices")
 }
 
 private stateCleanup() {
@@ -305,17 +298,21 @@ private modCodeVerMap(key, val) {
 	state?.codeVersions = cv
 }
 
+private reInitDevices() {
+	getChildDevices(true)?.each { cd-> cd?.initialize() }
+}
+
 def lanEventHandler(evt) {
 	def msg = parseLanMessage(evt.description)
-	def headerMap = msg?.headers      // => headers as a Map
+	def headerMap = msg?.headers
 	//Filter out calls from other LAN devices
 	if (headerMap != null){
 		if (headerMap?.source != "STSense") {
 			// log.debug "Non-sense data detected - ignoring."
 			return 0
 		}
-		if (headerMap?.source == "STSense" && headerMap?.senseAppId && headerMap?.senseAppId?.toString() != app?.getId()) {
-			log.warn "STSense Data Recieved but it was meant for a different SmartAppId..."
+		if (headerMap?.source == "STSense" && headerMap?.senseAppId && headerMap?.senseAppId?.toString() != app?.getId()) { 
+			log.warn "STSense Data Recieved but it was meant for a different SmartAppId..." 
 			return 0
 		}
 	}
@@ -324,7 +321,7 @@ def lanEventHandler(evt) {
 	if (msg?.body != null) {
 		try {
 			def slurper = new groovy.json.JsonSlurper()
-			result = slurper?.parseText(msg?.body)
+			result = slurper?.parseText(msg?.body) as Map
 		} catch (e) {
 			log.debug "FYI - got a Sense response, but it's apparently not JSON. Error: " + e + ". Body: " + msg?.body
 			return 1
@@ -340,10 +337,7 @@ def lanEventHandler(evt) {
 
 		List ignoreTheseDevs = settings?.senseDeviceFilter ?: []
 		if (result?.devices) {
-			//log.debug result.versionInfo.SmartApp
 			Map senseDeviceMap = [:]
-			// List totalUsageArr = []
-			// def totalUse = 0
 			log.debug "Updating (${result?.devices?.size()}) Sense Devices..."
 			result?.devices?.each { senseDevice ->
 				Boolean isMonitor = (senseDevice?.id == "SenseMonitor")
@@ -365,7 +359,6 @@ def lanEventHandler(evt) {
 				if(!updRequired) {
 					if (!childDevice) {
 						log.debug "name will be: " + fullName
-						//childDeviceAttrib = ["name": senseDevice.name, "completedSetup": true]
 						childDeviceAttrib = [name: childHandlerName, label: fullName, completedSetup: true]
 						try{
 							if(isMonitor) {
@@ -386,15 +379,12 @@ def lanEventHandler(evt) {
 							childDevice?.label = fullName
 						}
 					}
-					// if(!isMonitor) { totalUsageArr?.push(Float.parseFloat(senseDevice?.usage as String)) }
-					// if(isMonitor) { totalUse = senseDevice?.usage }
 					childDevice?.updateDeviceStatus(senseDevice)
 				}
 				modCodeVerMap((isMonitor ? "monitorDevice" : "energyDevice"), childDevice?.devVersion()) // Update device versions in codeVersion state Map
 				state?.lastDevDataUpd = getDtNow()
 				
 			}
-			// log.debug "Total Usage: ${totalUse} | Array: ${totalUsageArr?.sum()} | Frame: ${result?.frameId}"
 			state?.senseDeviceMap = senseDeviceMap
 		}
 		if(result?.serviceInfo) {

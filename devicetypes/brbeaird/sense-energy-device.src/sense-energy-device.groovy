@@ -2,7 +2,6 @@
  *	Sense Device
  *
  *	Author: Brian Beaird and Anthony Santilli
- *  Last Updated: 2018-08-28
  *
  ***************************
  *
@@ -20,13 +19,13 @@
  */
 
 import java.text.SimpleDateFormat
-String devVersion() { return "0.3.0"}
-String devModified() { return "2018-08-28"}
+String devVersion() { return "0.3.1"}
+String devModified() { return "2018-09-27"}
 String gitAuthor() { return "tonesto7" }
 String getAppImg(imgName) { return "https://raw.githubusercontent.com/${gitAuthor()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
 
 metadata {
-    definition (name: "Sense Energy Device", namespace: "brbeaird", author: "Brian Beaird", vid: "generic-power") {
+    definition (name: "Sense Energy Device", namespace: "brbeaird", author: "Anthony Santilli", vid: "generic-power") {
         capability "Power Meter"
         capability "Switch"
         capability "Actuator"
@@ -39,6 +38,8 @@ metadata {
         attribute "deviceModel", "string"
         attribute "detectionMature", "string"
         attribute "deviceRevoked", "string"
+        attribute "onCountToday", "string"
+        attribute "onCountWeek", "string"
     }
 
     preferences {
@@ -96,56 +97,89 @@ metadata {
         valueTile("detectionMature", "device.detectionMature", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
             state("detectionMature", label:'Detection Confirmed:\n${currentValue}')
         }
+        valueTile("onCountToday", "device.onCountToday", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("onCountToday", label:'On Count (Today):\n${currentValue}')
+        }
+        valueTile("onCountWeek", "device.onCountWeek", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("onCountWeek", label:'On Count (Week):\n${currentValue}')
+        }
         valueTile("deviceRevoked", "device.deviceRevoked", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
             state("deviceRevoked", label:'Device Valid:\n${currentValue}')
         }
         main(["power"])
-        details(["genericMulti", "lastUpdated", "dtCreated", "deviceLocation", "deviceMake", "deviceModel", "detectionMature", "deviceRevoked"])
+        details(["genericMulti", "lastUpdated", "dtCreated", "deviceLocation", "deviceMake", "deviceModel", "detectionMature", "deviceRevoked", "onCountToday", "onCountWeek"])
     }
 }
 
 def installed() {
-	log.trace "${device?.displayName} Executing Installed..."
+	log.trace "${device?.displayName} Installed..."
     def dt = formatDt(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
     state?.dateCreated = dt
 	initialize()
 }
 
 def updated() {
-	log.trace "${device?.displayName} Executing Updated..."
+	log.trace "${device?.displayName} Updated..."
 	initialize()
 }
 
 def initialize() {
-	log.trace "${device?.displayName} Executing initialize"
+    unschedule()
+	log.trace "${device?.displayName} initialize"
  	sendEvent(name: "DeviceWatch-DeviceStatus", value: "online")
 	sendEvent(name: "DeviceWatch-Enroll", value: [protocol: "cloud", scheme:"untracked"].encodeAsJson(), displayed: false)
+    if(!(device?.displayName in ["Sense-Other", "Sense-Always On"])) {
+        if(device?.currentState("onCountToday")?.value == null) { sendEvent(name: "onCountToday", value: 0, display: false, displayed: false) }
+        if(device?.currentState("onCountWeek")?.value == null) { sendEvent(name: "onCountWeek", value: 0, display: false, displayed: false) }
+        schedule("0 0 0 1/1 * ? *", "resetOnCount")
+        schedule("0 0 0 ? * MON *", "resetOnCountWeek")
+    }
+
 }
 
-//For testing only
-/*
 def on(){
-
-    log.debug "Scheduling push notification for ON!"
-    unschedule(checkForOnNotify)
-    unschedule(checkForOffNotify)
-    runIn(60*settings?.prefNotifyOnDelay, checkForOnNotify)
-    state.OnNotificationIsPending = true
-    state.lastTurnedOn = now()
+    log.trace "On() is not an actionable command for this device"
+    // log.debug "Scheduling push notification for ON!"
+    // unschedule(checkForOnNotify)
+    // unschedule(checkForOffNotify)
+    // runIn(60*settings?.prefNotifyOnDelay, checkForOnNotify)
+    // state.OnNotificationIsPending = true
+    // state.lastTurnedOn = now()
 }
 
 
-def off(){
-    log.debug "Updating status to off"
+def off() {
+    log.trace "Off() is not an actionable command for this device"
+    // log.debug "Updating status to off"
     //sendEvent(name: "switch", value: "off", display: true, displayed: true, isStateChange: true, descriptionText: device.displayName + " was off")
-    log.debug "Scheduling push notification for OFF!"
-    unschedule(checkForOnNotify)
-    unschedule(checkForOffNotify)
-    runIn(60*settings?.prefNotifyOffDelay, checkForOffNotify)
-    state.OffNotificationIsPending = true
-    state.lastTurnedOff = now()
+    // log.debug "Scheduling push notification for OFF!"
+    // unschedule(checkForOnNotify)
+    // unschedule(checkForOffNotify)
+    // runIn(60*settings?.prefNotifyOffDelay, checkForOffNotify)
+    // state.OffNotificationIsPending = true
+    // state.lastTurnedOff = now()
 }
-*/
+
+private resetOnCount() {
+    log.trace "resetOnCount"
+    state?.onCountToday = 0
+}
+
+private resetOnCountWeek() {
+    log.trace "resetOnCountWeek"
+    state?.onCountWeek = 0
+}
+
+public incrementOnCnt() {
+    if(!(device?.displayName in ["Sense-Other", "Sense-Always On"])) {
+        Integer dayCnt = state?.onCountToday ?: 0
+        Integer weekCnt = state?.onCountWeek ?: 0
+        state?.onCountToday = dayCnt++
+        state?.onCountWeek = weekCnt++
+        sendEvent(name: "onCountToday", value: dayCnt, display: false, displayed: false)
+        sendEvent(name: "onCountWeek", value: weekCnt, display: false, displayed: false)
+    }
+}
 
 def checkForOnNotify(){handlePendingNotification(state.lastTurnedOn, state.lastTurnedOff, "On", settings?.prefNotifyOnDelay)}
 def checkForOffNotify(){handlePendingNotification(state.lastTurnedOff, state.lastTurnedOn, "Off", settings?.prefNotifyOffDelay)}
@@ -210,9 +244,10 @@ def updateDeviceStatus(Map senseDevice){
                  }
              }
         }
-        if (senseDevice.state == "on"){
+        if (senseDevice?.state == "on"){
             logger("debug", "Change Switch Status to: (ON)")
             sendEvent(name: "switch", value: "on", display: true, displayed: true, isStateChange: true, descriptionText: device?.displayName + " was on")
+            incrementOnCnt()
             if (settings?.prefNotifyOn && ok2Notify()){
                 //Depending on prefs, send notification immediately or schedule after delay
                 if (settings?.prefNotifyOnDelay == null || settings?.prefNotifyOnDelay == 0){
@@ -288,8 +323,8 @@ def updateDeviceStatus(Map senseDevice){
         if (devName == "TotalUsage" && usageChange < 50 && currentPower != 0) { isUsageChange = false }
 
         if (isStateChange(device, "power", currentPower?.toString())) {
-            logger("debug", "Updating usage from $oldPower to $currentPower")
-            sendEvent(name: "power", value: currentPower, units: "W", display: true, displayed: true, isStateChange: true)
+            logger("debug", "Updating Power Usage from ${oldPower}W to ${currentPower}W")
+            sendEvent(name: "power", value: currentPower, units: "W", descriptionText: "Power Usage is ${currentPower}W", display: true, displayed: true, isStateChange: true)
         }
     }
     setOnlineStatus((senseDevice?.revoked == true) ? false : true)

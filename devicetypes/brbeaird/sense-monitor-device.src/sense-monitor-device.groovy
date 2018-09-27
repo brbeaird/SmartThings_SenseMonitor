@@ -2,7 +2,6 @@
  *	Sense Monitor Device
  *
  *	Author: Brian Beaird and Anthony Santilli
- *  Last Updated: 2018-08-28
  *
  ***************************
  *
@@ -20,13 +19,13 @@
  */
 
 import java.text.SimpleDateFormat
-String devVersion() { return "0.3.0"}
-String devModified() { return "2018-08-28"}
+String devVersion() { return "0.3.1"}
+String devModified() { return "2018-09-27"}
 String gitAuthor() { return "tonesto7" }
 String getAppImg(imgName) { return "https://raw.githubusercontent.com/${gitAuthor()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
 
 metadata {
-    definition (name: "Sense Monitor Device", namespace: "brbeaird", author: "Brian Beaird") {
+    definition (name: "Sense Monitor Device", namespace: "brbeaird", author: "Anthony Santilli", vid: "generic-power") {
         capability "Power Meter"
         capability "Sensor"
         
