@@ -156,22 +156,22 @@ def updateDeviceStatus(Map senseDevice){
         logger("debug", "voltage: ${senseDevice?.monitorData?.voltage}")
         String volt1 = senseDevice?.monitorData?.voltage && senseDevice?.monitorData?.voltage[0] ? senseDevice?.monitorData?.voltage[0] : "Not Set"
         if(isStateChange(device, "phase1Voltage", volt1?.toString())) {
-            sendEvent(name: "phase1Voltage", value: volt1?.toString(), display: true, displayed: true)
+            sendEvent(name: "phase1Voltage", value: volt1?.toString(), display: false, displayed: false)
         }
 
         String volt2 = senseDevice?.monitorData?.voltage && senseDevice?.monitorData?.voltage[1] ? senseDevice?.monitorData?.voltage[1] : "Not Set"
         if(isStateChange(device, "phase2Voltage", volt2?.toString())) {
-            sendEvent(name: "phase2Voltage", value: volt2?.toString(), display: true, displayed: true)
+            sendEvent(name: "phase2Voltage", value: volt2?.toString(), display: false, displayed: false)
         }
 
         String phaseUse1 = senseDevice?.monitorData?.phaseUsage && senseDevice?.monitorData?.phaseUsage[0] ? senseDevice?.monitorData?.phaseUsage[0] : "Not Set"
         if(isStateChange(device, "phase1Usage", phaseUse1?.toString())) {
-            sendEvent(name: "phase1Usage", value: phaseUse1?.toString(), display: true, displayed: true)
+            sendEvent(name: "phase1Usage", value: phaseUse1?.toString(), display: false, displayed: false)
         }
 
         String phaseUse2 = senseDevice?.monitorData?.phaseUsage && senseDevice?.monitorData?.phaseUsage[1] ? senseDevice?.monitorData?.phaseUsage[1] : "Not Set"
         if(isStateChange(device, "phase2Usage", phaseUse2?.toString())) {
-            sendEvent(name: "phase2Usage", value: phaseUse2?.toString(), display: true, displayed: true)
+            sendEvent(name: "phase2Usage", value: phaseUse2?.toString(), display: false, displayed: false)
         }
         String hz = senseDevice?.monitorData?.hz ?: "Not Set"
         if(isStateChange(device, "cycleHz", hz?.toString())) {
