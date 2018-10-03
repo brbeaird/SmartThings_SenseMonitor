@@ -2,8 +2,6 @@
  *	Sense Monitor SmartApp
  *
  *	Author: Brian Beaird and Anthony Santilli
- *  Last Updated: 2018-09-27
- *
  *
  *  Copyright 2018 Brian Beaird and Anthony Santilli
  *
@@ -20,14 +18,15 @@
 import java.text.SimpleDateFormat
 include 'asynchttp_v1'
 
-String appVersion() { return "0.3.1" }
+String appVersion() { return "0.3.2" }
+String appModified() { return "2018-10-03"}
 String appAuthor() { return "Brian Beaird" }
 String gitBranch() { return "tonesto7" }
 String getAppImg(imgName) 	{ return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
 Map minVersions() { //These define the minimum versions of code this app will work with.
 	return [
-		monitorDevice: 030,
-		energyDevice: 030,
+		monitorDevice: 032,
+		energyDevice: 032,
 		server: 030
 	]
 }
