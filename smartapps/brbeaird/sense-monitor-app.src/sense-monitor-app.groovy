@@ -18,9 +18,9 @@
 import java.text.SimpleDateFormat
 include 'asynchttp_v1'
 
-String appVersion() { return "0.3.2" }
-String appModified() { return "2018-10-03"}
-String appAuthor() { return "Brian Beaird" }
+String appVersion() { return "0.3.3" }
+String appModified() { return "2018-10-04"}
+String appAuthor() { return "Anthony Santilli & Brian Beaird" }
 String gitBranch() { return "tonesto7" }
 String getAppImg(imgName) 	{ return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
 Map minVersions() { //These define the minimum versions of code this app will work with.
@@ -249,9 +249,6 @@ def installed() {
 
 def updated() {
 	log.debug "Updated with settings: ${settings}"
-	// if (state?.previousVersion != state?.thisSmartAppVersion){
-	// 	getVersionInfo(state?.previousVersion, state?.thisSmartAppVersion);
-	// }
 	if(!state?.isInstalled) { state?.isInstalled = true }
 	unsubscribe()
 	initialize()
@@ -259,7 +256,6 @@ def updated() {
 
 def uninstalled() {
 	log.warn "uninstalling app and devices"
-	// getVersionInfo(state.previousVersion, 0);
 }
 
 def initialize() {
@@ -270,19 +266,30 @@ def initialize() {
 	subscribe(location, null, lanEventHandler, [filterEvents:false])
 	stateCleanup()
 	updCodeVerMap()
-	runIn(5, "senseServiceUpdate", [overwrite: true])
+	runIn(5, "senseServiceUpdate")
 	runIn(3, "reInitDevices")
+}
+
+private checkIfCodeUpdated() {
+	if(state?.codeVersions && state?.codeVersions?.mainApp != appVersion()) {
+		log.info "Code Version Change! Re-Initializing SmartApp in 5 seconds..."
+		state?.pollBlocked = true
+		runIn(5, "updated", [overwrite: false])
+		return true
+	}
+	state?.pollBlocked = false
+	return false
 }
 
 private stateCleanup() {
 	List items = ["availableDevices", "lastMsgDt"]
 	items?.each { si-> if(state?.containsKey(si as String)) { state?.remove(si)} }
+	state?.pollBlocked = false
 }
 
 def onAppTouch(evt) {
-	// log.trace "appTouch..."
-	notificationCheck()
-	senseServiceUpdate()
+	log.trace "appTouch..."
+	updated()
 }
 
 private updCodeVerMap() {
@@ -325,7 +332,10 @@ def lanEventHandler(evt) {
 			log.debug "FYI - got a Sense response, but it's apparently not JSON. Error: " + e + ". Body: " + msg?.body
 			return 1
 		}
-
+		if(checkIfCodeUpdated()) { 
+			log.warn "Possible Code Version Update Detected... Device Updates will occur on next cycle."
+			return 0 
+		}
 		//Check for minimum versions before processing
 		Boolean updRequired = false
 		List updRequiredItems = []
