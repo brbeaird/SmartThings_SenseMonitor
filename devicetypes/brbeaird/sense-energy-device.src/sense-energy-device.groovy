@@ -20,7 +20,7 @@
 
 import java.text.SimpleDateFormat
 String devVersion() { return "0.3.2"}
-String devModified() { return "2018-10-08"}
+String devModified() { return "2018-10-03"}
 String gitAuthor() { return "tonesto7" }
 String getAppImg(imgName) { return "https://raw.githubusercontent.com/${gitAuthor()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
 
@@ -172,12 +172,16 @@ private resetOnCountWeek() {
 
 public incrementOnCnt() {
     if(!(device?.displayName in ["Sense-Other", "Sense-Always On"])) {
-        Integer dayCnt = state?.onCountToday ?: 0
-        Integer weekCnt = state?.onCountWeek ?: 0
-        state?.onCountToday = dayCnt++
-        state?.onCountWeek = weekCnt++
-        sendEvent(name: "onCountToday", value: dayCnt, display: false, displayed: false)
-        sendEvent(name: "onCountWeek", value: weekCnt, display: false, displayed: false)
+        // log.trace "incrementOnCnt (before) | dayCnt: ${state?.onCountToday} | weekCnt: ${state?.onCountWeek}"
+        state?.onCountToday = state?.onCountToday?.isNumber() && state?.onCountToday >= 1 ? state?.onCountToday?.toInteger() + 1 : 1
+        state?.onCountWeek = state?.onCountWeek?.isNumber() && state?.onCountWeek >= 1 ? state?.onCountWeek?.toInteger() + 1 : 1
+        // log.trace "incrementOnCnt (after) | dayCnt: ${state?.onCountToday} | weekCnt: ${state?.onCountWeek}"
+        if(isStateChange(device, "onCountToday", state?.onCountToday?.toString())) {
+            sendEvent(name: "onCountToday", value: state?.onCountToday, display: false, displayed: false)
+        }
+        if(isStateChange(device, "onCountWeek", state?.onCountWeek?.toString())) {
+            sendEvent(name: "onCountWeek", value: state?.onCountWeek, display: false, displayed: false)
+        }
     }
 }
 
@@ -284,7 +288,7 @@ def updateDeviceStatus(Map senseDevice){
     // log.debug "usage: ${senseDevice?.usage} | currentPower: $currentPower | oldPower: ${oldPower}"
     
     if(senseDevice?.containsKey("dateCreated")) {
-        def dtCreated = senseDevice?.dateCreated ? formatDt(parseDt(senseDevice?.dateCreated, "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")) : (state?.dateCreated ?: "")
+        def dtCreated = senseDevice?.dateCreated ? formatDt(parseDt(senseDevice?.dateCreated, "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")) : (state?.dateCreated ? formatDt(parseDt(state?.dateCreated, "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")) : "")
         if(isStateChange(device, "dtCreated", dtCreated as String)) {
             sendEvent(name: "dtCreated", value: dtCreated as String, display: true, displayed: true)
         }
@@ -337,8 +341,9 @@ public setOnlineStatus(Boolean isOnline) {
     }
 }
 
-def formatDt(dt, String tzFmt=("MM/d/yyyy hh:mm:ss a")) {
-	def tf = new SimpleDateFormat(tzFmt); tf.setTimeZone(location.timeZone);
+def formatDt(dt, String tzFmt="MM/d/yyyy h:mm:ss a") {
+	def tf = new SimpleDateFormat(tzFmt)
+    if(location?.timeZone) { tf.setTimeZone(location?.timeZone) }
     return tf.format(dt)
 }
 

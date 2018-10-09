@@ -19,8 +19,8 @@
  */
 
 import java.text.SimpleDateFormat
-String devVersion() { return "0.3.1"}
-String devModified() { return "2018-09-27"}
+String devVersion() { return "0.3.2"}
+String devModified() { return "2018-10-03"}
 String gitAuthor() { return "tonesto7" }
 String getAppImg(imgName) { return "https://raw.githubusercontent.com/${gitAuthor()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
 
