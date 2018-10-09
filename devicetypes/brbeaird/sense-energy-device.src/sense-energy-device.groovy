@@ -19,8 +19,8 @@
  */
 
 import java.text.SimpleDateFormat
-String devVersion() { return "0.3.1"}
-String devModified() { return "2018-09-27"}
+String devVersion() { return "0.3.2"}
+String devModified() { return "2018-10-08"}
 String gitAuthor() { return "tonesto7" }
 String getAppImg(imgName) { return "https://raw.githubusercontent.com/${gitAuthor()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
 
@@ -265,7 +265,7 @@ def updateDeviceStatus(Map senseDevice){
     }
 
     Float currentPower = senseDevice?.usage?.isNumber() ? senseDevice?.usage as Float : 0.0
-    Float oldPower = device.currentState("power")?.floatValue ?: -1
+    Float oldPower = device.currentState("power")?.floatValue ?: 0
     // Boolean usageIsOverAlert = (settings?.prefNotifyUsageOverVal && (currentPower > settings?.prefNotifyUsageOverVal?.toFloat()))
     // if (settings?.prefNotifyUsageOverVal) {
     //      if (usageIsOverAlert && ok2Notify()) {
