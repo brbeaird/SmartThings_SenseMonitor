@@ -362,9 +362,10 @@ def lanEventHandler(evt) {
 				//log.debug "device DNI will be: " + dni + " for " + senseDevice.name
 				def childDevice = getChildDevice(dni)
 				// log.debug "childHandlerName: ${childDevice?.name}"
-				def childDeviceAttrib = [:]
-				def fullName = !isMonitor ? "Sense-" + senseDevice?.name : "Sense Monitor"
-				def childHandlerName = isMonitor ? "Sense Monitor Device" : "Sense Energy Device"
+				Map childDeviceAttrib = [:]
+				String fullName = !isMonitor ? "Sense-" + senseDevice?.name : "Sense Monitor"
+				log.debug "childDeviceLabel: ${childDevice?.getLabel()} | senseName: ${senseDevice?.name}"
+				String childHandlerName = isMonitor ? "Sense Monitor Device" : "Sense Energy Device"
 				if(!updRequired) {
 					if (!childDevice) {
 						log.debug "name will be: " + fullName
@@ -390,6 +391,7 @@ def lanEventHandler(evt) {
 					}
 					childDevice?.updateDeviceStatus(senseDevice)
 				}
+				log.debug "------"
 				modCodeVerMap((isMonitor ? "monitorDevice" : "energyDevice"), childDevice?.devVersion()) // Update device versions in codeVersion state Map
 				state?.lastDevDataUpd = getDtNow()
 				
