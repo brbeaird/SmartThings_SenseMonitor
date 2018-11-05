@@ -226,29 +226,26 @@ def updateDeviceStatus(Map senseDevice){
     String oldStatus = device.currentValue("switch")
     //log.debug "Old status was " + oldStatus
     //log.debug "New status is: " + senseDevice.state
-
-    Boolean statusChange = (oldStatus != senseDevice?.state)
-
-    //If on/off status has changed
-    if (statusChange){
-         if (senseDevice?.state == "off"){
-             logger("debug", "Change Switch Status to: (OFF)")
-             sendEvent(name: "switch", value: "off", display: true, displayed: true, isStateChange: true, descriptionText: device?.displayName + " was off")
-             if (settings?.prefNotifyOff && ok2Notify()){
-                 //Depending on prefs, send notification immediately or schedule after delay
-                 if (settings?.prefNotifyOffDelay == null || settings?.prefNotifyOffDelay == 0){
-                     parent?.sendMsg("Sense Device Alert", "${devName} turned off!")
-                 } else {
-                     logger("debug", "Scheduling OFF Notification!")
-                     unschedule(checkForOnNotify)
-                     unschedule(checkForOffNotify)
-                     runIn(60*settings?.prefNotifyOffDelay, checkForOffNotify)
-                     //state.OffNotificationIsPending = true
-                     state.lastTurnedOff = now()
-                 }
-             }
+    if(isStateChange(device, "switch", senseDevice?.state?.toString())) {
+        //If on/off status has changed
+        if (senseDevice?.state == "off") {
+            logger("debug", "Change Switch Status to: (OFF)")
+            sendEvent(name: "switch", value: "off", display: true, displayed: true, isStateChange: true, descriptionText: device?.displayName + " was off")
+            if (settings?.prefNotifyOff && ok2Notify()) {
+                //Depending on prefs, send notification immediately or schedule after delay
+                if (settings?.prefNotifyOffDelay == null || settings?.prefNotifyOffDelay == 0){
+                    parent?.sendMsg("Sense Device Alert", "${devName} turned off!")
+                } else {
+                    logger("debug", "Scheduling OFF Notification!")
+                    unschedule(checkForOnNotify)
+                    unschedule(checkForOffNotify)
+                    runIn(60*settings?.prefNotifyOffDelay, checkForOffNotify)
+                    //state.OffNotificationIsPending = true
+                    state.lastTurnedOff = now()
+                }
+            }
         }
-        if (senseDevice?.state == "on"){
+        if (senseDevice?.state == "on") {
             logger("debug", "Change Switch Status to: (ON)")
             sendEvent(name: "switch", value: "on", display: true, displayed: true, isStateChange: true, descriptionText: device?.displayName + " was on")
             incrementOnCnt()
