@@ -19,7 +19,7 @@ import java.text.SimpleDateFormat
 include 'asynchttp_v1'
 
 String appVersion() { return "0.3.3" }
-String appModified() { return "2018-10-04"}
+String appModified() { return "2018-10-05"}
 String appAuthor() { return "Anthony Santilli & Brian Beaird" }
 String gitBranch() { return "tonesto7" }
 String getAppImg(imgName) 	{ return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
@@ -364,7 +364,7 @@ def lanEventHandler(evt) {
 				// log.debug "childHandlerName: ${childDevice?.name}"
 				Map childDeviceAttrib = [:]
 				String fullName = !isMonitor ? "Sense-" + senseDevice?.name : "Sense Monitor"
-				log.debug "childDeviceLabel: ${childDevice?.getLabel()} | senseName: ${senseDevice?.name}"
+				// log.debug "childDeviceLabel: ${childDevice?.getLabel()} | senseName: ${senseDevice?.name}"
 				String childHandlerName = isMonitor ? "Sense Monitor Device" : "Sense Energy Device"
 				if(!updRequired) {
 					if (!childDevice) {
@@ -391,7 +391,7 @@ def lanEventHandler(evt) {
 					}
 					childDevice?.updateDeviceStatus(senseDevice)
 				}
-				log.debug "------"
+				// log.debug "------"
 				modCodeVerMap((isMonitor ? "monitorDevice" : "energyDevice"), childDevice?.devVersion()) // Update device versions in codeVersion state Map
 				state?.lastDevDataUpd = getDtNow()
 				
