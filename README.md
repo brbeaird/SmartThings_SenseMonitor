@@ -69,3 +69,19 @@ In the future, should you wish to update, simply repeat steps 2 and 3. The only 
  5. Open the server.js file in a text editor and put in your Sense login information and SmartThings hub IP under the required settings section. You can find your hub IP in the SmartThings IDE by clicking the Hub link, then clicking your hub, then scrolling down to IP Address. Be sure to save your changes.
  6. Run `node server.js`. This starts up the data connection. If all goes well, you should see a successful connection message. Leave this window running to continue collecting data and sending it to SmartThings.
  7. I strongly recommend using something like PM2 to keep the node server running in the background. Will add more detailed steps on that later.
+
+### Build Docker Image
+ 1. Change to the node_server directory.
+ 2. Run `docker build -t sense-monitor .`
+
+### Running the Docker Container
+ 1. Copy or rename the my_env.list.dist file to my_env.list (`cp my_env.list.dist my_env.list`)
+ 2. Edit the my_evn.list file and update the sense email, sense password, and smartthingsHubIp variables. Notes: 1) Single quotes may cause passed parameters to be invalid. 2) Port must match the port exposed in the Dockerfile file (port 9021).
+ 3. Save the my_evn.list file.
+ 4. Run the Docker container instance on the same port specified in the Dockerfile file, port 9021. Add the -d parameter to run the container detached in the background: `docker run -d -p 9021:9021 --env-file ./my_env.list sense-monitor`
+
+### List docker containers running
+ 1. Run `docker ps`
+
+### To stop a Docker process, get container id from above command:
+ 1. Run `doccker stop <containerID>`
