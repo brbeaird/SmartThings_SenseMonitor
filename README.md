@@ -70,18 +70,18 @@ In the future, should you wish to update, simply repeat steps 2 and 3. The only 
  6. Run `node server.js`. This starts up the data connection. If all goes well, you should see a successful connection message. Leave this window running to continue collecting data and sending it to SmartThings.
  7. I strongly recommend using something like PM2 to keep the node server running in the background. Will add more detailed steps on that later.
 
-### Build Docker Image
- 1. Change to the node_server directory.
- 2. Run `docker build -t sense-monitor .`
-
-### Running the Docker Container
- 1. Copy or rename the my_env.list.dist file to my_env.list (`cp my_env.list.dist my_env.list`)
- 2. Edit the my_evn.list file and update the sense email, sense password, and smartthingsHubIp variables. Notes: 1) Single quotes may cause passed parameters to be invalid. 2) Port must match the port exposed in the Dockerfile file (port 9021).
- 3. Save the my_evn.list file.
- 4. Run the Docker container instance on the same port specified in the Dockerfile file, port 9021. Add the -d parameter to run the container detached in the background: `docker run -d -p 9021:9021 --env-file ./my_env.list sense-monitor`
+### Running as a Docker Container
+ 1. Install Docker (see: <a href="https://docs.docker.com/get-started/">Docker - Get Started</a>). 
+ 2. Change to the node_server directory.
+ 3. Copy or rename the docker.env.dist file to docker.env (`cp docker.env.dist docker.env`)
+ 4. Edit the docker.env file and update the sense email, sense password, and smartthingsHubIp variables. Notes: 1) Quotes may cause passed parameters to be invalid. 2) Port must match the port exposed in the docker-compose.yml file (port 9021). The port can be changed, but needs to be updated in all places referenced.
+ 5. Save the docker.env file.
+ 6. Run `docker-commpose up` Add the -d option to run the container detached in the background: `docker-compose up -d`
+ 
+ Note: Upon start up, docker-compose will make a copy of config-docker.js to use instead of config.js, the config-docker.js uses parameters from the docker.env file. 
 
 ### List docker containers running
- 1. Run `docker ps`
+ 1. Run `docker-compose ps` or `docker ps`
 
 ### To stop a Docker process, get container id from above command:
- 1. Run `doccker stop <containerID>`
+ 1. Run `docker-compose stop` or can run `docker stop <containerId>` (from `docker ps`) if you have more than one container running.
