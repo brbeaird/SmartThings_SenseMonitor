@@ -2,13 +2,14 @@ version: '3'
 services:
   sense-monitor:
     image: node:11
+    working_dir: /app
     env_file:
       - ./docker.env
     build: .
-    command: npm run start
+    command: bash -c "npm install && npm run start"
     volumes:
       - .:/app/
-      - /app/node_modules
+      - ./node_modules:/app/node_modules
       - ./config_docker.js:/app/config.js
     ports:
       - "9021:9021"
