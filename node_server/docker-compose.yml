@@ -1,0 +1,11 @@
+version: '3'
+services:
+  sense-monitor:
+    image: sensemonitor:1
+    working_dir: /app
+    env_file:
+      - ./docker.env
+    build: .
+    command: npm run start
+    ports:
+      - "9021:9021"

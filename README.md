@@ -69,3 +69,33 @@ In the future, should you wish to update, simply repeat steps 2 and 3. The only 
  5. Open the server.js file in a text editor and put in your Sense login information and SmartThings hub IP under the required settings section. You can find your hub IP in the SmartThings IDE by clicking the Hub link, then clicking your hub, then scrolling down to IP Address. Be sure to save your changes.
  6. Run `node server.js`. This starts up the data connection. If all goes well, you should see a successful connection message. Leave this window running to continue collecting data and sending it to SmartThings.
  7. I strongly recommend using something like PM2 to keep the node server running in the background. Will add more detailed steps on that later.
+
+### Running as a Docker Container
+ 1. Install Docker (see: <a href="https://docs.docker.com/get-started/">Docker - Get Started</a>) and Docker Compose for your environment. 
+ 2. Change to the node_server directory.
+ 3. Copy or rename the docker.env.dist file to docker.env (`cp docker.env.dist docker.env`)
+ 4. Edit the docker.env file and update the sense email, sense password, and smartthingsHubIp variables. Notes: 1) Quotes may cause passed parameters to be invalid. 2) Port must match the port exposed in the docker-compose.yml file (port 9021). The port can be changed, but needs to be updated in all places referenced.
+ 5. Save the docker.env file.
+ 6. Run `docker-commpose up` Add the -d option to run the container detached in the background: `docker-compose up -d`. The first time `docker-compose up` is ran, Docker will build the image file used to run the Sense Monitor.
+ 
+ Note: Upon start up, docker-compose will make a copy of config-docker.js to use instead of config.js, the config-docker.js uses parameters from the docker.env file. 
+
+### List docker containers running
+ 1. Run `docker-compose ps` or `docker ps`
+
+### To stop a Docker process, get container id from above command:
+ 1. Run `docker-compose stop` or can run `docker stop <containerId>` (from `docker ps`) if you have more than one container running.
+
+### Rebuild the Docker image
+ 1. Update files for this project from github.
+ 2. Change to the node_server directory.
+ 3. Either run `docker-compose build` or `docker-compose up --build`
+ 
+### Work with a running Docker container
+ 1. Run `docker ps` to view the containers id
+ 2. Run `docker exec -it <containerId> bash` to open a bash window. Keep in mind that commands are limited since the container only has what it needs to run.
+ 3. Type `exit` when you are ready to close the bash prompt.'
+ 
+### Remove a Docker image
+ 1. Run `docker images` to get a list of images
+ 2. Run `docker rmi <imageId>` to remove a specific image. 
