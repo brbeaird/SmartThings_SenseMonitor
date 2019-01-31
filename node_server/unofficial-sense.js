@@ -60,7 +60,20 @@ module.exports = async (config, onData) => {
 
         authData = await (await fetch(`${apiURL}authenticate`, { method: 'POST', body: `email=${config.email}&password=${config.password}`, headers: {"Content-Type":"application/x-www-form-urlencoded"} })).json()
         setInterval(async () => {
-            authData = await (await fetch(`${apiURL}authenticate`, { method: 'POST', body: `email=${config.email}&password=${config.password}`, headers: {"Content-Type":"application/x-www-form-urlencoded"} })).json()
+            try{
+                let authResponse = await fetch(`${apiURL}authenticate`, { method: 'POST', body: `email=${config.email}&password=${config.password}`, 
+                                        headers: {"Content-Type":"application/x-www-form-urlencoded"} }) 
+                if (authResponse.status == 200){
+                    authData = await authResponse.json();
+                }
+                else{
+                    console.log("bad status");
+                }               
+                
+            } catch (ex){
+                console.log("Auth error: " + ex);
+            }            
+                
             setupWS(onData)
         }, 900000)
         //console.log(authData);
