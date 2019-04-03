@@ -29,6 +29,7 @@ const callbackPort = config.callbackPort || 9021;
     We send an update when power usage on a device has changed by at least 200 watts (usagePushThreshold).
 ***************************************************************************************************************************************/
 var autoReconnect = config.autoReconnect || true;
+var pollingInterval = 60;  //Number of seconds between opening/closing the websocket
 var usagePushThreshold = 200; //Change in usage that determines when a special push to ST is made
 var maxSecBetweenPush = 60; //Maximum number of seconds between data pushes to ST
 var minSecBetweenPush = 10; //Minimum number of seconds between data pushes to ST
@@ -240,7 +241,7 @@ async function startSense(){
         setInterval(() => {
             tsLogger(`Opening websocket...`)
             mySense.openStream();
-        }, 30000);
+        }, pollingInterval * 1000);
 
     } catch (error) {
         tsLogger(`FATAL ERROR: ${error}`);

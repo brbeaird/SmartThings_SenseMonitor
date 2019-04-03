@@ -128,9 +128,8 @@ module.exports =
                         senseWS.close();
                     },
                     
-                    getAuth: async () => {                        
-                        authData = await (await fetch(`${apiURL}authenticate`, { method: 'POST', body: `email=${config.email}&password=${config.password}`, headers: {"Content-Type":"application/x-www-form-urlencoded"} })).json()   
-                        return authData
+                    getAuth: async () => { 
+                        return authData = await doAuth();                        
                     },
                     
                     getDevices: async () => {
