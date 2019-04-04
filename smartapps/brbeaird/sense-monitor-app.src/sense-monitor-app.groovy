@@ -3,7 +3,7 @@
  *
  *	Author: Brian Beaird and Anthony Santilli
  *
- *  Copyright 2018 Brian Beaird and Anthony Santilli
+ *  Copyright 2019 Brian Beaird and Anthony Santilli
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -18,23 +18,23 @@
 import java.text.SimpleDateFormat
 include 'asynchttp_v1'
 
-String appVersion() { return "0.3.3" }
-String appModified() { return "2018-10-05"}
+String appVersion() { return "0.3.4" }
+String appModified() { return "2019-04-04"}
 String appAuthor() { return "Anthony Santilli & Brian Beaird" }
-String gitBranch() { return "tonesto7" }
+String gitBranch() { return "brbeaird" }
 String getAppImg(imgName) 	{ return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
 Map minVersions() { //These define the minimum versions of code this app will work with.
 	return [
-		monitorDevice: 032,
-		energyDevice: 032,
-		server: 030
+		monitorDevice: 033,
+		energyDevice: 033,
+		server: 040
 	]
 }
 
 definition(
 	name: "Sense Monitor App",
 	namespace: "brbeaird",
-	author: "Anthony Santilli",
+	author: "Anthony Santilli & Brian Beaird",
 	description: "Connects SmartThings with Sense",
 	category: "My Apps",
 	iconUrl: "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/sense.1x.png",
@@ -309,7 +309,14 @@ private reInitDevices() {
 }
 
 def lanEventHandler(evt) {
-	def msg = parseLanMessage(evt.description)
+	def msg
+    try{
+            msg = parseLanMessage(evt.description)            
+    }
+    catch (e){
+        	//log.debug "Not able to parse lan message: " + e
+            return 1
+    }
 	def headerMap = msg?.headers
 	//Filter out calls from other LAN devices
 	if (headerMap != null){
@@ -317,8 +324,8 @@ def lanEventHandler(evt) {
 			// log.debug "Non-sense data detected - ignoring."
 			return 0
 		}
-		if (headerMap?.source == "STSense" && headerMap?.senseAppId && headerMap?.senseAppId?.toString() != app?.getId()) { 
-			log.warn "STSense Data Recieved but it was meant for a different SmartAppId..." 
+		if (headerMap?.source == "STSense" && headerMap?.senseAppId && headerMap?.senseAppId?.toString() != app?.getId()) {
+			log.warn "STSense Data Recieved but it was meant for a different SmartAppId..."
 			return 0
 		}
 	}
@@ -342,6 +349,16 @@ def lanEventHandler(evt) {
 		["server":"Sense Server", "monitorDevice":"Monitor Device", "energyDevice":"Energy Device"]?.each { k,v->
 			Map codeVers = state?.codeVersions
 			if(codeVers && codeVers[k as String] && (versionStr2Int(codeVers[k as String]) < minVersions()[k as String])) { updRequired = true; updRequiredItems?.push("$v"); }
+		}
+        
+        //TODO: When device ID array received, audit child devices to see if we should delete any stale children
+		if (result?.deviceIds) {
+			log.debug "Got ID's"
+		}
+
+		//TODO: When toggleDevices array received, toggle them on and off just to have a record of the event
+		if (result?.toggleDevices) {
+			log.debug "Got toggles"
 		}
 
 		List ignoreTheseDevs = settings?.senseDeviceFilter ?: []

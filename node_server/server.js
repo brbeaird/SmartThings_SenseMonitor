@@ -1,7 +1,7 @@
 //Required settings
 'use strict';
 
-const serverVersion = "0.3.0";
+const serverVersion = "0.4.0";
 //Libraries
 const http = require('http');
 const sense = require('./unofficial-sense'); //Temporarily using our own version until pull requests are merged in
