@@ -52,33 +52,44 @@ function tsLogger(msg) {
 }
 
 function addDevice(data) {
-    tsLogger("Adding New Device: (" + data.name + ") to DevicesList...");
-    if (data.id === "SenseMonitor") {
-        deviceList[data.id] = data;
-    } else {
-        let isGuess = (data.tags && data.tags.NameUserGuess && data.tags.NameUserGuess === 'true');
-        let devData = {
-            id: data.id,
-            name: (isGuess ? data.name + ' (?)' : data.name),
-            state: "unknown",
-            usage: -1,
-            currentlyOn: false,
-            recentlyChanged: true
-        };
-
-        if (data.id !== "SenseMonitor") {
-            devData.location = data.location || "";
-            devData.make = data.make || "";
-            devData.model = data.model || "";
-            devData.icon = data.icon || "";
-            if (data.tags) {
-                devData.mature = (data.tags.Mature === "true") || false;
-                devData.revoked = (data.tags.Revoked === "true") || false;
-                devData.dateCreated = data.tags.DateCreated || "";
+    try {        
+        if (data.id === "SenseMonitor") {
+            deviceList[data.id] = data;
+        } else {
+            
+            //Ignore devices that are hidden on the Sense app (usually merged devices)
+            if (data.tags.DeviceListAllowed == "false"){                
+                return 0
             }
+            
+            tsLogger("Adding New Device: (" + data.name + ") to DevicesList...");        
+            let isGuess = (data.tags && data.tags.NameUserGuess && data.tags.NameUserGuess === 'true');
+            let devData = {
+                id: data.id,
+                name: (isGuess ? data.name + ' (?)' : data.name),
+                state: "unknown",
+                usage: -1,
+                currentlyOn: false,
+                recentlyChanged: true
+            };
+
+            if (data.id !== "SenseMonitor") {
+                devData.location = data.location || "";
+                devData.make = data.make || "";
+                devData.model = data.model || "";
+                devData.icon = data.icon || "";
+                if (data.tags) {
+                    devData.mature = (data.tags.Mature === "true") || false;
+                    devData.revoked = (data.tags.Revoked === "true") || false;
+                    devData.dateCreated = data.tags.DateCreated || "";
+                }
+            }
+            deviceList[data.id] = devData;
         }
-        deviceList[data.id] = devData;
+    } catch (error) {
+        tsLogger(error.stack);
     }
+    
 }
 
 function exitHandler(options, err) {
@@ -222,7 +233,7 @@ async function startSense(){
                     return 0;
                 }
                 currentlyProcessing = true;
-                tsLogger(`Fresh data incoming...`)
+                //tsLogger(`Fresh data incoming...`)
                 processData(data);
             }
             return 0;
@@ -239,7 +250,7 @@ async function startSense(){
         //Open websocket flow (and re-open again on an interval)        
         mySense.openStream();
         setInterval(() => {
-            tsLogger(`Opening websocket...`)
+            //tsLogger(`Opening websocket...`)
             mySense.openStream();
         }, pollingInterval * 1000);
 
@@ -398,12 +409,12 @@ function processData(data) {
                 options.headers.senseAppId = config.smartThingsAppId;
             }
             //Send to SmartThings!
-            tsLogger(`** Preparing to send ${devArray.length} devices to SmartThings! **`);
+            //tsLogger(`** Preparing to send ${devArray.length} devices to SmartThings! **`);
 
             request(options)
                 .then(function() {
                     eventCount++;
-                    tsLogger('** Sent (' + deviceGroups[0].length + ') Devices to SmartThings! | Usage: (' + convUsage(data.payload.w) + 'W) **');
+                    tsLogger('** Sent (' + deviceGroups.length + ') Devices to SmartThings! | Usage: (' + convUsage(data.payload.w) + 'W) **');
 
                     //Push other groups
                     let arrtest = 1;
@@ -411,9 +422,6 @@ function processData(data) {
                     deviceGroups.forEach(devGroup => {
                         options.body = {"devices": devGroup}
                         request(options)
-                            .then(() => {
-                                tsLogger('** Sent (' + devGroup.length + ') Devices to SmartThings!**');
-                            })
                     })
                     currentlyProcessing = false;
                 })
@@ -433,326 +441,6 @@ function convUsage(val, rndTo = 2) {
         val = parseFloat(val).toFixed(rndTo);
     }
     return val;
-}
-
-function startSenseStream() {
-    //On initial load, get basic list of devices
-    sense({
-            email: email,
-            password: password,
-            verbose: false,
-            access_token: 't1.20599.20563.64910f780f1725955480d1299d6314ea275cf52e16c761191d0821e41a9aac91', //t1.20599.20563.64910f780f1725955480d1299d6314ea275cf52e16c761191d0821e41a9aac91
-            user_id: 20599,
-            monitorId: '33218'
-        })
-        .then(async mySense => {
-                try {
-                    
-                //let times = await mySense.getTimeline();
-                tsLogger("Successfully Authenticated with Sense! Data is Incoming!");                
-                reconnectPending = false;
-                getSenseDevices();
-                updateMonitorInfo()                    
-
-                //Handle websocket data updates (one at a time)
-                mySense.events.on('data', (data) => {
-                    if (data.type === "realtime_update" && data.payload && data.payload.devices) {
-                        if (currentlyProcessing){
-                            return 0;
-                        }
-                        currentlyProcessing = true;
-                        processData(data);
-                    }
-                    return 0;
-                });
-
-                //Handle closures and errors
-                mySense.events.on('close', (data) => {
-                    handleWSClose({
-                        eventData: data,
-                        msg: 'Connection closed.'
-                    });
-                });
-                mySense.events.on('error', (data) => {
-                    handleWSClose({
-                        eventData: data,
-                        msg: 'An error occurred. ' + data
-                    });
-                });                
-
-                function getSenseDevices() {
-                    mySense.getDevices().then(devices => {
-                        // console.log("devices:", devices);
-                        for (let dev of devices) {
-                            addDevice(dev);
-                        }
-                    });
-                }
-
-                mySense.openStream();
-                setInterval(() => {
-                    mySense.openStream();
-                }, 30000);
-
-                
-
-                function updateMonitorInfo(otherData = {}) {
-                    try{
-                        mySense.getMonitorInfo()
-                        .then(monitor => {
-                            // console.log('MonitorInfo:', monitor);
-                            
-                                let devData = {
-                                    id: "SenseMonitor",
-                                    name: "Sense Monitor",
-                                    state: "on",
-                                    monitorData: {
-                                        online: (monitor.monitor_info.online === true) || false,
-                                        mac: monitor.monitor_info.mac || "",
-                                        ndt_enabled: (monitor.monitor_info.ndt_enabled === true) || false,
-                                        wifi_signal: monitor.monitor_info.signal || "",
-                                        wifi_ssid: monitor.monitor_info.ssid || "",
-                                        version: monitor.monitor_info.version || ""
-                                    }
-                                };
-                                if (Object.keys(otherData).length) {
-                                    for (const key in otherData) {
-                                        devData.monitorData[key] = otherData[key];
-                                    }
-                                }
-                                if (monitor.device_detection && monitor.device_detection.in_progress) {
-                                    devData.monitorData.detectionsPending = monitor.device_detection.in_progress || {};
-                                }
-                                if (deviceList["SenseMonitor"]) {
-                                    deviceList["SenseMonitor"] = devData;
-                                } else {
-                                    addDevice(devData);
-                                }
-                                                        
-                        }, error => {
-                            reject(error);
-                        }).catch(error => {
-                            console.log(error.stack);
-                        });
-                    } catch (error) {
-                        reject(error);
-                    }
-                }
-
-                function handleWSClose(data) {
-                    console.log('Sense WebSocket Closed | Reason: ' + data.msg);
-                }
-
-                function convUsage(val, rndTo = 2) {
-                    if (val !== -1) {
-                        val = parseFloat(val).toFixed(rndTo);
-                    }
-                    return val;
-                }
-
-                //Process the data from Sense!
-                function processData(data) {
-                    // console.log('Payload:', data);
-                    if (data.type === "realtime_update") {
-                        if (data.payload && data.payload.devices) {
-                            mySense.closeStream();
-                            let updateNow = false;
-                            // console.log('Payload:', data.payload);
-
-                            //Mark off saved list so we can detect which have been seen lately
-                            Object.keys(deviceList).forEach(function(key) {
-                                if (key !== "SenseMonitor") {
-                                    deviceList[key].currentlyOn = false;
-                                    if (deviceList[key].usage !== -1) {
-                                        deviceList[key].recentlyChanged = false;
-                                    } //Reset recentChange flag unless it's initial load
-                                }
-                            });
-
-
-                            //Loop over currently active devices and refresh the saved list
-                            // We'll send data to SmartThings if status has changed or if usage has changed over a certain amount
-                            for (const dev of data.payload.devices) {
-                                //If Device is NEW make a new spot for it in the deviceMap
-                                if (!deviceList[dev.id]) {
-                                    addDevice(dev);
-                                }
-                                // console.log('key(' + dev.id + '):', dev.tags);
-
-                                let prevState = deviceList[dev.id].state;
-                                let prevUsage = convUsage(deviceList[dev.id].usage);
-                                let currentUsage = convUsage(dev.w);
-                                let usageDelta = convUsage(currentUsage) - convUsage(prevUsage);
-
-                                //Don't go below 1 watt
-                                if (convUsage(deviceList[dev.id].usage) < 1) {
-                                    deviceList[dev.id].usage = convUsage(1);
-                                }
-
-                                if (dev.name !== "Other") {
-                                    if (prevState !== "on" && prevState !== "unknown") {
-                                        tsLogger('Device State Changed: ' + dev.name + " turned ON!");
-                                        updateNow = true;
-                                        deviceList[dev.id].recentlyChanged = true;
-                                    }
-                                    if (prevUsage !== -1 && Math.abs(usageDelta) > usagePushThreshold) {
-                                        tsLogger(dev.name + " usage changed by " + usageDelta);
-                                        updateNow = true;
-                                    }
-                                }
-
-                                deviceList[dev.id].state = "on";
-                                deviceList[dev.id].usage = convUsage(dev.w);
-                                deviceList[dev.id].currentlyOn = true;
-                                if (dev.id !== "SenseMonitor") {
-                                    if (dev.location) {
-                                        deviceList[dev.id].location = dev.location;
-                                    }
-                                    if (dev.make) {
-                                        deviceList[dev.id].make = dev.make;
-                                    }
-                                    if (dev.model) {
-                                        deviceList[dev.id].model = dev.model;
-                                    }
-                                    if (dev.icon) {
-                                        deviceList[dev.id].icon = dev.icon;
-                                    }
-                                    if (dev.tags) {
-                                        deviceList[dev.id].mature = (dev.tags.Mature === "true") || false;
-                                        deviceList[dev.id].revoked = (dev.tags.Revoked === "true") || false;
-                                        deviceList[dev.id].dateCreated = dev.tags.DateCreated || "";
-                                        deviceList[dev.id].deviceType = dev.tags.Type;
-                                        deviceList[dev.id].userDeviceType = dev.tags.UserDeviceType;
-                                        deviceList[dev.id].isPending = dev.tags.Pending;
-                                    }
-                                }
-                            }
-                            //Convert list to array for easier parsing in ST
-                            let devArray = [];
-                            //Loop over saved list again and mark any remaining devices as off
-                            Object.keys(deviceList).forEach(function(key) {
-                                if (key !== "SenseMonitor") {
-                                    if (deviceList[key].currentlyOn === false) {
-                                        if (deviceList[key].name !== "Other" && deviceList[key].state !== 'off' && deviceList[key].state !== "unknown") {
-                                            tsLogger('Device State Changed: ' + deviceList[key].name + " turned OFF!");
-                                            updateNow = true;
-                                            deviceList[key].recentlyChanged = true;
-                                        }
-                                        deviceList[key].state = "off";
-                                        deviceList[key].usage = 0;
-                                    }
-                                } else {
-                                    deviceList[key].usage = convUsage(data.payload.w);
-                                }
-                                devArray.push(deviceList[key]);
-                            });
-
-
-
-
-                            let secondsSinceLastPush = (Date.now() - lastPush.getTime()) / 1000;
-                            console.log('lastPush: ', secondsSinceLastPush, ' minSecs: ', minSecBetweenPush);
-
-                            // // Override updateNow if it's been less than 15 seconds since our last push
-                            // if (secondsSinceLastPush <= minSecBetweenPush) {
-                            //     updateNow = false;
-                            // }
-
-                            //if (updateNow || secondsSinceLastPush >= maxSecBetweenPush) {
-                            let otherMonData = {};
-                            if (Object.keys(data.payload.voltage).length) {
-                                let v = [];
-                                v.push(convUsage(data.payload.voltage[0], 1));
-                                v.push(convUsage(data.payload.voltage[1], 1));
-                                otherMonData.voltage = v;
-                            }
-                            if (Object.keys(data.payload.channels).length) {
-                                let phaseUse = [];
-                                phaseUse.push(convUsage(data.payload.channels[0], 2));
-                                phaseUse.push(convUsage(data.payload.channels[1], 2));
-                                otherMonData.phaseUsage = phaseUse;
-                            }
-                            otherMonData.hz = convUsage(data.payload.hz, 0);
-                            updateMonitorInfo(otherMonData);
-                            lastPush = new Date();
-
-                            //Split device into smaller chunks to make sure we don't exceed SmartThings limits
-                            let deviceGroups = [];
-                            let chunkSize = 5;
-                            for (var index = 0; index < devArray.length; index += chunkSize){
-                                let deviceGroup = devArray.slice(index, index+chunkSize);
-                                deviceGroups.push(deviceGroup);
-                            }
-
-                            let options = {
-                                method: 'POST',
-                                uri: 'http://' + smartThingsHubIP + ':39500/event',
-                                headers: { 'source': 'STSense' },
-                                body: {
-                                    'devices': deviceGroups[0],
-                                    'timestamp': Date.now(),
-                                    'serviceInfo': {
-                                        'version': serverVersion,
-                                        'sessionEvts': eventCount,
-                                        'startupDt': getServiceUptime(),
-                                        'ip': getIPAddress(),
-                                        'port': callbackPort,
-                                        'config': {
-                                            'minSecBetweenPush': minSecBetweenPush,
-                                            'maxSecBetweenPush': maxSecBetweenPush,
-                                            'usagePushThreshold': usagePushThreshold,
-                                            'smartThingsHubIP': smartThingsHubIP
-                                        }
-                                    },
-                                    'totalUsage': data.payload.w,
-                                    'frameId': data.payload.frame
-                                },
-                                json: true
-                            };
-                            if (smartThingsAppId !== undefined || smartThingsAppId !== '') {
-                                options.headers.senseAppId = config.smartThingsAppId;
-                            }
-                            //Send to SmartThings!
-                            tsLogger(`** Preparing to send ${devArray.length} devices to SmartThings! **`);
-
-                            request(options)
-                                .then(function() {
-                                    eventCount++;
-                                    tsLogger('** Sent (' + deviceGroups[0].length + ') Devices to SmartThings! | Usage: (' + convUsage(data.payload.w) + 'W) | Last Updated: (' + convUsage(secondsSinceLastPush, 1) + 'sec) **');
-
-                                    //Push other groups
-                                    let arrtest = 1;
-                                    deviceGroups.splice(0,1);
-                                    deviceGroups.forEach(devGroup => {
-                                        options.body = {"devices": devGroup}
-                                        request(options)
-                                            .then(() => {
-                                                tsLogger('** Sent (' + devGroup.length + ') Devices to SmartThings!**');
-                                            })
-                                    })
-                                    currentlyProcessing = false;
-                                })
-                                .catch(function(err) {
-                                    console.log("ERROR: Unable to connect to SmartThings Hub: " + err.message);
-                                    currentlyProcessing = false;
-                                });
-                            //}
-                        }
-                    }
-                }
-                } catch (error) {
-                    console.error(`oh noes ${error.stack}`)
-                }
-                
-            },
-            
-            function(err) {
-                console.log("Sense error: " + err.message);
-                return;
-            }).catch(error => {
-                console.log("Sense error: " + err.message);
-                return;
-            });
 }
 
 
