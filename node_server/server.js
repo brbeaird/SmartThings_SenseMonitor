@@ -176,6 +176,19 @@ function periodicRefresh(){
                 addDevice(dev);
             }
         }
+    }).then(() => {
+        let options = 
+        {
+            method: 'POST',
+            uri: 'http://' + smartThingsHubIP + ':39500/event',
+            headers: { 'source': 'STSense' },
+            body: {
+                "deviceIds": JSON.stringify(deviceIdList)
+                
+            },
+            json: true
+        }
+        request(options)          
     });
 }
 
@@ -474,10 +487,7 @@ function processData(data) {
                 deviceGroups.forEach(devGroup => {
                     options.body = {"devices": devGroup}
                     request(options)
-                })
-
-                options.body = {"deviceIds": JSON.stringify(deviceIdList)};
-                request(options)          
+                })                
 
                 currentlyProcessing = false;
             })
