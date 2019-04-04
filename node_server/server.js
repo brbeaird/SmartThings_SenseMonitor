@@ -39,6 +39,7 @@ var minSecBetweenPush = 10; //Minimum number of seconds between data pushes to S
 var mySense;
 var currentlyProcessing = false;
 var deviceList = {};
+var monitorData = {};
 var deviceIdList = [];
 var missedToggles = [];
 var serviceStartTime = Date.now(); //Returns time in millis
@@ -167,7 +168,8 @@ function periodicRefresh(){
     tsLogger('Refreshing monitor data...');
     mySense.getMonitorInfo()
         .then(monitor => {
-            updateMonitorInfo(monitor);
+            monitorData = monitor;
+            updateMonitorInfo();
         })
 
     mySense.getDevices().then(devices => {
@@ -209,8 +211,9 @@ function refreshAuth(){
     
 }
 
-function updateMonitorInfo(monitor, otherData = {}) {
-    try{    
+function updateMonitorInfo(otherData = {}) {
+    try{  
+        let monitor = monitorData;
         let devData = {
             id: "SenseMonitor",
             name: "Sense Monitor",
@@ -239,7 +242,7 @@ function updateMonitorInfo(monitor, otherData = {}) {
         }
         
     } catch (error) {
-        tsLogger(error);
+        tsLogger(error + error.stack);
     }
 }
 
@@ -270,6 +273,7 @@ async function startSense(){
         //Get monitor info
         await mySense.getMonitorInfo()
         .then(monitor => {
+            monitorData = monitor;
             updateMonitorInfo(monitor);
         })
 
