@@ -435,7 +435,7 @@ function processData(data) {
                 otherMonData.phaseUsage = phaseUse;
             }
             otherMonData.hz = convUsage(data.payload.hz, 0);
-            //updateMonitorInfo(otherMonData);
+            updateMonitorInfo(otherMonData);
             lastPush = new Date();
 
             //Split device into smaller chunks to make sure we don't exceed SmartThings limits
