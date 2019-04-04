@@ -39,6 +39,8 @@ var minSecBetweenPush = 10; //Minimum number of seconds between data pushes to S
 var mySense;
 var currentlyProcessing = false;
 var deviceList = {};
+var deviceIdList = [];
+var missedToggles = [];
 var serviceStartTime = Date.now(); //Returns time in millis
 var eventCount = 0; //Keeps a tally of how many times data was sent to ST in the running sessions
 
@@ -84,6 +86,7 @@ function addDevice(data) {
                 }
             }
             deviceList[data.id] = devData;
+            deviceIdList.push(data.id);
         }
     } catch (error) {
         tsLogger(error.stack);
@@ -166,7 +169,21 @@ function periodicRefresh(){
         .then(monitor => {
             updateMonitorInfo(monitor);
         })
+
+    mySense.getDevices().then(devices => {
+        for (let dev of devices) {
+            if (!deviceList[dev.id]) {
+                addDevice(dev);
+            }
+        }
+    });
 }
+
+// function getMissedEvents(timeline){
+    
+//     var test = 1;
+//     //missedToggles
+// }
 
 //Attempt to refresh auth
 function refreshAuth(){
@@ -225,6 +242,18 @@ async function startSense(){
             }            
         });
 
+        // await mySense.getTimeline().then(timeline => {            
+        //     if (timeline.items){
+        //         var lastPush1 = new Date();
+        //         timeline.items.map(event => {
+        //             if (event.type == "DeviceWasOn"){
+        //                 missedToggles.add(event.device_id);                        
+        //             }
+        //         })
+        //     }            
+        // })
+        
+
         //Get monitor info
         await mySense.getMonitorInfo()
         .then(monitor => {
@@ -269,14 +298,21 @@ async function startSense(){
         }, websocketPollingInterval * 1000);
 
         
-        setInterval(() => {
-            //tsLogger(`Opening websocket...`)
-            periodicRefresh();
-        }, refreshInterval * 1000);
+        //Wait 30 seconds, then set up recurring refresh
+        setTimeout(() => {
+            setInterval(() => {                
+                periodicRefresh();
+            }, refreshInterval * 1000);    
+        }, 30000);
+        
+        
 
 
     } catch (error) {
         tsLogger(`FATAL ERROR: ${error}`);
+        if (error.stack){
+            tsLogger(`FATAL ERROR: ${error.stack}`);
+        }
         process.exit();        
     }
 }
@@ -441,6 +477,10 @@ function processData(data) {
                 options.body = {"devices": devGroup}
                 request(options)
             })
+
+            options.body = {"deviceIds": JSON.stringify(deviceIdList)};
+            request(options)          
+
             currentlyProcessing = false;
         })
         .catch(function(err) {
