@@ -129,10 +129,9 @@ def servPrefPage() {
 		}
 		if(settings?.stHub) {
 			section("Service Push Settings") {
-				input (name: "minSecBetweenPush", type: "number", title: "Minimum Wait Between Updates", description: "in Seconds...", required: false, defaultValue: 10, submitOnChange: true, image: getAppImg("delay_time.png"))
-				input (name: "maxSecBetweenPush", type: "number", title: "Maximum Wait Between Updates", description: "in Seconds...", required: false, defaultValue: 60, submitOnChange: true, image: getAppImg("delay_time.png"))
-				input (name: "usagePushThreshold", type: "number", title: "Usage Change to Trigger Update", description: "In Watts...", required: false, defaultValue: 200, submitOnChange: true, image: getAppImg("threshold.png"))
-				paragraph title: "Notice", "These changes will be applied on the next server data refresh."
+				input (name: "websocketPollingInterval", type: "number", title: "Time between websocket polling", description: "in Seconds...", required: false, defaultValue: 60, submitOnChange: true, image: getAppImg("delay_time.png"))
+				input (name: "refreshInterval", type: "number", title: "Time between monitor data refreshes", description: "in Seconds...", required: false, defaultValue: 300, submitOnChange: true, image: getAppImg("delay_time.png"))
+				paragraph title: "Notice", "Setting these lower than the default may trigger Sense rate limiting. These changes will be applied on the next server data refresh."
 			}
 		}
 		if(!newInstall && state?.nodeServiceInfo) {
@@ -474,9 +473,8 @@ private senseServiceUpdate() {
 			headers: [
 				"HOST": host,
 				"smartThingsHubIp": "${smartThingsHubIp}",
-				"usagePushThreshold": settings?.usagePushThreshold,
-				"maxSecBetweenPush": settings?.maxSecBetweenPush,
-				"minSecBetweenPush": settings?.minSecBetweenPush
+				"refreshInterval": settings?.refreshInterval,
+				"websocketPollingInterval": settings?.websocketPollingInterval
 			],
 			path: "/updateSettings",
 			body: ""
@@ -864,10 +862,9 @@ String getServiceConfDesc() {
 	String str = ""
 	str += (settings?.stHub) ? "${str != "" ? "\n" : ""}Hub Info:" : ""
 	str += (settings?.stHub) ? "${str != "" ? "\n" : ""} • IP: ${settings?.stHub?.getLocalIP()}" : ""
-	str += (settings?.usagePushThreshold || settings?.minSecBetweenPush || settings?.maxSecBetweenPush) ? "\n\nServer Push Settings:" : ""
-	str += (settings?.usagePushThreshold) ? "${str != "" ? "\n" : ""} • Usage Threshold : (${settings?.usagePushThreshold}W)" : ""
-	str += (settings?.minSecBetweenPush) ? "${str != "" ? "\n" : ""} • Minimum Wait: (${settings?.minSecBetweenPush}sec)" : ""
-	str += (settings?.maxSecBetweenPush) ? "${str != "" ? "\n" : ""} • Maximum Wait: (${settings?.maxSecBetweenPush}sec)" : ""
+	str += (settings?.websocketPollingInterval || settings?.refreshInterval) ? "\n\nServer Push Settings:" : ""
+	str += (settings?.websocketPollingInterval) ? "${str != "" ? "\n" : ""} • Minimum Wait: (${settings?.websocketPollingInterval}sec)" : ""
+	str += (settings?.refreshInterval) ? "${str != "" ? "\n" : ""} • Maximum Wait: (${settings?.refreshInterval}sec)" : ""
 	return str != "" ? str : null
 }
 

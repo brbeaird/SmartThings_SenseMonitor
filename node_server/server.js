@@ -40,9 +40,6 @@ websocket checks. Each of these calls then POSTs an update to the hub.
 
 var websocketPollingInterval = 60;  //Number of seconds between opening/closing the websocket
 var refreshInterval = 300;  //Number of seconds between updating monitor data via API calls (not needed as frequently)
-var usagePushThreshold = 200; //Change in usage that determines when a special push to ST is made
-var maxSecBetweenPush = 60; //Maximum number of seconds between data pushes to ST
-var minSecBetweenPush = 10; //Minimum number of seconds between data pushes to ST
 
 //Global Variables
 var mySense;                        //Main Sense API object
@@ -397,9 +394,8 @@ function processData(data) {
                     'ip': getIPAddress(),
                     'port': callbackPort,
                     'config': {
-                        'minSecBetweenPush': minSecBetweenPush,
-                        'maxSecBetweenPush': maxSecBetweenPush,
-                        'usagePushThreshold': usagePushThreshold,
+                        'refreshInterval': refreshInterval,
+                        'websocketPollingInterval': websocketPollingInterval,
                         'smartThingsHubIP': smartThingsHubIP
                     }
                 },
