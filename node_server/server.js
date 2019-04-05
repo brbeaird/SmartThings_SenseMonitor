@@ -32,7 +32,7 @@ hub via LAN after processing each websocket data payload.
 Note that POSTing data to the hub via LAN is subject to strict character limits. Because of this, we split device lists into chunks
 to make sure the size of each payload is small.
 
-The API calls run once every 5 minutes. This data is less time-sensitive and just needs to be run to refresh the device list and 
+The API calls run once every 5 minutes. This data is less time-sensitive and just needs to be run to refresh the device list and
 current monitor data. We also check the timeline history to see if there were any short-lived on/off events that happened between 1-minute
 websocket checks. Each of these calls then POSTs an update to the hub.
 
@@ -65,13 +65,13 @@ lastPush.setDate(lastPush.getDate() - 1);
 //Main startup function - gets initial data and sets up recurring tasks
 async function startSense(){
     try {
-        mySense = await sense({email: email, password: password, verbose: false})
-                        
+        mySense = await sense({email: email, password: password, verbose: false})   //Set up Sense API object and authenticate
+
         //Get devices
-        await mySense.getDevices().then(devices => {            
+        await mySense.getDevices().then(devices => {
             for (let dev of devices) {
                 addDevice(dev);
-            }            
+            }
         });
 
         //Get monitor info
@@ -109,23 +109,23 @@ async function startSense(){
         mySense.events.on('close', (data) => {
             tsLogger(`Sense WebSocket Closed | Reason: ${data.wasClean ? 'Normal' : data.reason}`);
         });
-        mySense.events.on('error', (data) => {            
-            tsLogger('Error: Sense WebSocket Closed | Reason: ' + data.msg);            
+        mySense.events.on('error', (data) => {
+            tsLogger('Error: Sense WebSocket Closed | Reason: ' + data.msg);
         });
 
-        //Open websocket flow (and re-open again on an interval)        
+        //Open websocket flow (and re-open again on an interval)
         mySense.openStream();
         setInterval(() => {
             //tsLogger(`Opening websocket...`)
             mySense.openStream();
         }, websocketPollingInterval * 1000);
 
-        
+
         //Wait 30 seconds (so this offset from the websocket intervals), then set up recurring refresh
         setTimeout(() => {
-            setInterval(() => {                
+            setInterval(() => {
                 periodicRefresh();
-            }, refreshInterval * 1000);    
+            }, refreshInterval * 1000);
         }, 30000);
 
     } catch (error) {
@@ -133,23 +133,23 @@ async function startSense(){
         if (error.stack){
             tsLogger(`FATAL ERROR: ${error.stack}`);
         }
-        process.exit();        
+        process.exit();
     }
 }
 
 //Add a device to our local device list
 function addDevice(data) {
-    try {        
+    try {
         if (data.id === "SenseMonitor") {   //The monitor device itself is treated differently
             deviceList[data.id] = data;
         } else {
-            
+
             //Ignore devices that are hidden on the Sense app (usually merged devices)
-            if (data.tags.DeviceListAllowed == "false"){                
+            if (data.tags.DeviceListAllowed == "false"){
                 return 0
             }
-            
-            tsLogger("Adding New Device: (" + data.name + ") to DevicesList...");        
+
+            tsLogger("Adding New Device: (" + data.name + ") to DevicesList...");
             let isGuess = (data.tags && data.tags.NameUserGuess && data.tags.NameUserGuess === 'true');
             let devData = {
                 id: data.id,
@@ -178,7 +178,7 @@ function addDevice(data) {
     } catch (error) {
         tsLogger(error.stack);
     }
-    
+
 }
 
 //Handles periodic refresh tasks that run less frequently
@@ -197,14 +197,14 @@ function periodicRefresh(){
             }
         }
     }).then(() => {
-        let options = 
+        let options =
         {
             method: 'POST',
             uri: 'http://' + smartThingsHubIP + ':39500/event',
             headers: { 'source': 'STSense' },
             body: {
                 "deviceIds": JSON.stringify(deviceIdList)
-                
+
             },
             json: true
         }
@@ -216,25 +216,25 @@ function periodicRefresh(){
 
 //Checks Sense Timeline for short-lived on/off events that may have been missed
 function getMissedEvents(){
-    try {        
+    try {
         let missedToggles = [];
         mySense.getTimeline().then(timeline => {
-            timeline.items.map(event => {                
+            timeline.items.map(event => {
                 if (event.type == "DeviceWasOn" && Date.parse(event.start_time) > deviceList[event.device_id].lastOn){
                     tsLogger(`Missed toggle event detected for ${event.device_name} (${event.device_id})`);
                     missedToggles.push(event.device_id);
                     deviceList[event.device_id].lastOn = new Date().getTime();
                 }
             })
-            
+
             //Post missed events to SmartThings so we can toggle those on and off
             if (missedToggles.length > 0){
                 let options = postOptions;
-                postOptions.body = {"toggleIds": missedToggles}            
+                postOptions.body = {"toggleIds": missedToggles}
                 request(options)
-            }            
-        })            
-        
+            }
+        })
+
     } catch (error) {
         tsLogger(error.stack);
     }
@@ -242,7 +242,7 @@ function getMissedEvents(){
 
 //Update the monitor device info
 function updateMonitorInfo(otherData = {}) {
-    try{  
+    try{
         let monitor = monitorData;
         let devData = {
             id: "SenseMonitor",
@@ -270,7 +270,7 @@ function updateMonitorInfo(otherData = {}) {
         } else {
             addDevice(devData);
         }
-        
+
     } catch (error) {
         tsLogger(error + error.stack);
     }
@@ -278,7 +278,7 @@ function updateMonitorInfo(otherData = {}) {
 
 //Main websocket data processing
 function processData(data) {
-    try {        
+    try {
         if (data.payload && data.payload.devices) {
 
             //Mark off saved list so we can detect which have been seen lately
@@ -291,9 +291,9 @@ function processData(data) {
                 }
             });
 
-            //Loop over currently active devices and refresh the saved list            
+            //Loop over currently active devices and refresh the saved list
             for (const dev of data.payload.devices) {
-                
+
                 if (!deviceList[dev.id]) { //If Device is NEW make a new spot for it in the deviceMap
                     addDevice(dev);
                 }
@@ -304,10 +304,10 @@ function processData(data) {
                 if (convUsage(deviceList[dev.id].usage) < 1) {
                     deviceList[dev.id].usage = convUsage(1);
                 }
-                
+
                 if (dev.name !== "Other") {
                     if (prevState !== "on" && prevState !== "unknown") {
-                        tsLogger('Device State Changed: ' + dev.name + " turned ON!");                    
+                        tsLogger('Device State Changed: ' + dev.name + " turned ON!");
                         deviceList[dev.id].recentlyChanged = true;
                         deviceList[dev.id].lastOn = new Date();
                     }
@@ -358,7 +358,7 @@ function processData(data) {
             otherMonData.hz = convUsage(data.payload.hz, 0);
             updateMonitorInfo(otherMonData);
 
-            
+
             let devArray = [];  //We'll convert object list to array for easier parsing in ST
 
             //Loop over saved list again and mark any remaining devices as off
@@ -366,7 +366,7 @@ function processData(data) {
                 if (key !== "SenseMonitor") {
                     if (deviceList[key].currentlyOn === false) {
                         if (deviceList[key].name !== "Other" && deviceList[key].state !== 'off' && deviceList[key].state !== "unknown") {
-                            tsLogger('Device State Changed: ' + deviceList[key].name + " turned OFF!");                        
+                            tsLogger('Device State Changed: ' + deviceList[key].name + " turned OFF!");
                             deviceList[key].recentlyChanged = true;
                         }
                         deviceList[key].state = "off";
@@ -377,7 +377,7 @@ function processData(data) {
                 }
                 devArray.push(deviceList[key]);
             });
-            
+
             lastPush = new Date();  //Take note of the last ST push timestamp
 
             //Split device into smaller chunks to make sure we don't exceed SmartThings limits
@@ -389,7 +389,7 @@ function processData(data) {
             }
 
             let options = postOptions;
-            options.body =             
+            options.body =
             {
                 'devices': deviceGroups[0],
                 'timestamp': Date.now(),
@@ -409,13 +409,13 @@ function processData(data) {
                 'totalUsage': data.payload.w,
                 'frameId': data.payload.frame
             }
-            
+
             if (smartThingsAppId !== undefined || smartThingsAppId !== '') {
                 options.headers.senseAppId = config.smartThingsAppId;
             }
 
             //****Send to SmartThings!****
-            //Send first group that also contains config info            
+            //Send first group that also contains config info
             request(options)
             .then(function() {
                 eventCount++;
@@ -438,18 +438,18 @@ function processData(data) {
     } catch (error) {
         tsLogger(error + ' ' + error.stack);
         currentlyProcessing = false;
-    }     
-    
+    }
+
 }
 
 //Attempt to refresh auth
 function refreshAuth(){
     try {
-        mySense.getAuth();    
+        mySense.getAuth();
     } catch (error) {
-        tsLogger(`Re-auth failed: ${error}. Exiting.`); 
+        tsLogger(`Re-auth failed: ${error}. Exiting.`);
         process.exit();
-    }    
+    }
 }
 
 //Format usage
@@ -557,7 +557,7 @@ function startWebServer() {
         }
     });
     process.stdin.resume(); //so the program will not close instantly
-    
+
     //do something when app is closing
      process.on('exit', exitHandler.bind(null, {
          exit: true
@@ -576,4 +576,3 @@ function startWebServer() {
 // This starts the Stream and Webserver
 startWebServer();
 startSense();
-
