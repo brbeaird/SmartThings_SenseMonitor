@@ -21,12 +21,21 @@ const callbackPort = config.callbackPort || 9021;
 
 //Optional Settings (Set in Config.js)
 /**************************************************************************************************************************************
-    This process opens up a websocket connection to Sense; we see realtime data from Sense every couple seconds.
-    While parsing that data, we watch for significant changes so we can push to SmartThings only when relevant to avoid spamming the hub.
-    At baseline, we send an update at least once every minute (maxSecBetweenPush).
-    We do NOT send updates less than 10 seconds apart (minSecBetweenPush).
-    We send an update when at least one device has turned on or off.
-    We send an update when power usage on a device has changed by at least 200 watts (usagePushThreshold).
+This process gets data from Sense in two methods:
+1.) Websocket: gets current device power details
+2.) API calls: used to get device list, Sense monitor info, and recent Timeline history events
+
+We open and close the websocket once a minute to get a snapshot of current usage. Holding the websocket open for longer periods causes
+load on Sense servers and can trigger rate limits, which impact usability of the Sense mobile app. We sent an update to the SmartThings
+hub via LAN after processing each websocket data payload.
+
+Note that POSTing data to the hub via LAN is subject to strict character limits. Because of this, we split device lists into chunks
+to make sure the size of each payload is small.
+
+The API calls run once every 5 minutes. This data is less time-sensitive and just needs to be run to refresh the device list and 
+current monitor data. We also check the timeline history to see if there were any short-lived on/off events that happened between 1-minute
+websocket checks. Each of these calls then POSTs an update to the hub.
+
 ***************************************************************************************************************************************/
 
 var websocketPollingInterval = 60;  //Number of seconds between opening/closing the websocket
@@ -36,18 +45,24 @@ var maxSecBetweenPush = 60; //Maximum number of seconds between data pushes to S
 var minSecBetweenPush = 10; //Minimum number of seconds between data pushes to ST
 
 //Global Variables
-var mySense;
-var currentlyProcessing = false;
-var deviceList = {};
-var monitorData = {};
-var deviceIdList = [];
-//var missedToggles = [];
-var serviceStartTime = Date.now(); //Returns time in millis
-var eventCount = 0; //Keeps a tally of how many times data was sent to ST in the running sessions
+var mySense;                        //Main Sense API object
+var currentlyProcessing = false;    //Flag to ensure only one websocket packet is handled at a time
+var deviceList = {};                //Holds list of Sense devices
+var monitorData = {};               //Holds monitor device data
+var deviceIdList = [];              //Holds list of Sense devices (just the IDs) - used to look for stale devices in ST
+var serviceStartTime = Date.now();  //Returns time in millis
+var eventCount = 0;                 //Keeps a tally of how many times data was sent to ST in the running sessions
+var postOptions = {                 //Basic template for POSTing to SmartThings
+        method: 'POST',
+        uri: 'http://' + smartThingsHubIP + ':39500/event',
+        headers: { 'source': 'STSense' },
+        json: true
+}
 
 var lastPush = new Date();
 lastPush.setDate(lastPush.getDate() - 1);
 
+//Logging with timestamp
 function tsLogger(msg) {
     let dt = new Date().toLocaleString();
     console.log(dt + ' | ' + msg);
@@ -55,29 +70,20 @@ function tsLogger(msg) {
 
 function getMissedEvents(){
     try {        
-        ////     getMissedEvents(timeline.items);            
         let missedToggles = [];
         mySense.getTimeline().then(timeline => {
-            timeline.items.map(event => {
-                //if (event.device_name == "Flood Lights"){
+            timeline.items.map(event => {                
                 if (event.type == "DeviceWasOn" && Date.parse(event.start_time) > deviceList[event.device_id].lastOn){
                     tsLogger(`Missed toggle event detected for ${event.device_name} (${event.device_id})`);
                     missedToggles.push(event.device_id);
                     deviceList[event.device_id].lastOn = new Date().getTime();
                 }
             })
+            
+            //Post missed events to SmartThings so we can toggle those on and off
             if (missedToggles.length > 0){
-                let options = 
-                {
-                    method: 'POST',
-                    uri: 'http://' + smartThingsHubIP + ':39500/event',
-                    headers: { 'source': 'STSense' },
-                    body: {
-                        "toggleIds": missedToggles
-                        
-                    },
-                    json: true
-                }
+                let options = postOptions;
+                postOptions.body = {"toggleIds": missedToggles}            
                 request(options)
             }            
         })            
@@ -87,9 +93,10 @@ function getMissedEvents(){
     }
 }
 
+//Add a device to our local device list
 function addDevice(data) {
     try {        
-        if (data.id === "SenseMonitor") {
+        if (data.id === "SenseMonitor") {   //The monitor device itself is treated differently
             deviceList[data.id] = data;
         } else {
             
@@ -130,6 +137,7 @@ function addDevice(data) {
     
 }
 
+//Handle process closing
 function exitHandler(options, err) {
     console.log('exitHandler: (PID: ' + process.pid + ')', options, err);
     if (options.cleanup) {
@@ -141,6 +149,7 @@ function exitHandler(options, err) {
     process.exit();
 }
 
+//Handle graceful shutdown
 var gracefulStopNoMsg = function() {
     tsLogger('gracefulStopNoMsg: ', process.pid);
     console.log('graceful setting timeout for PID: ' + process.pid);
@@ -155,6 +164,7 @@ var gracefulStop = function() {
     let a = gracefulStopNoMsg();
 };
 
+//Get Node server's IP so SmartThings hub can keep track of it
 function getIPAddress() {
     var interfaces = os.networkInterfaces();
     for (var devName in interfaces) {
@@ -168,6 +178,7 @@ function getIPAddress() {
     return '0.0.0.0';
 }
 
+//Get uptime
 function getServiceUptime() {
     var now = Date.now();
     var diff = (now - serviceStartTime) / 1000;
@@ -195,7 +206,6 @@ function getHostUptimeStr(time) {
         'm': minutes,
         's': seconds
     };
-    //return (years + 'y, ' + days + 'd, ' + hours + 'h:' + (minutes < 10 ? '0' + minutes : minutes) + 'm:' + (seconds < 10 ? '0' + seconds : seconds) +'s');
 }
 
 //Handles periodic refresh tasks that run less frequently
@@ -243,6 +253,7 @@ function refreshAuth(){
     
 }
 
+//Update the monitor device info
 function updateMonitorInfo(otherData = {}) {
     try{  
         let monitor = monitorData;
@@ -278,13 +289,13 @@ function updateMonitorInfo(otherData = {}) {
     }
 }
 
+//Main function
 async function startSense(){
     try {
         mySense = await sense({email: email, password: password, verbose: false})
                         
         //Get devices
-        await mySense.getDevices().then(devices => {
-            // console.log("devices:", devices);
+        await mySense.getDevices().then(devices => {            
             for (let dev of devices) {
                 addDevice(dev);
             }            
@@ -298,6 +309,7 @@ async function startSense(){
         })
 
         //Set up websocket event handlers
+
         //Handle websocket data updates (one at a time)
         mySense.events.on('data', (data) => {
 
@@ -314,7 +326,7 @@ async function startSense(){
                     return 0;
                 }
                 currentlyProcessing = true;
-                tsLogger(`Fresh data incoming...`)
+                tsLogger(`Fresh websocket device data incoming...`)
                 processData(data);
             }
             return 0;
@@ -336,15 +348,12 @@ async function startSense(){
         }, websocketPollingInterval * 1000);
 
         
-        //Wait 30 seconds, then set up recurring refresh
+        //Wait 30 seconds (so this offset from the websocket intervals), then set up recurring refresh
         setTimeout(() => {
             setInterval(() => {                
                 periodicRefresh();
             }, refreshInterval * 1000);    
         }, 30000);
-        
-        
-
 
     } catch (error) {
         tsLogger(`FATAL ERROR: ${error}`);
@@ -365,40 +374,33 @@ function processData(data) {
                     deviceList[key].currentlyOn = false;
                     if (deviceList[key].usage !== -1) {
                         deviceList[key].recentlyChanged = false;
-                    } //Reset recentChange flag unless it's initial load
+                    }
                 }
             });
 
-            //Loop over currently active devices and refresh the saved list
-            // We'll send data to SmartThings if status has changed or if usage has changed over a certain amount
+            //Loop over currently active devices and refresh the saved list            
             for (const dev of data.payload.devices) {
-                //If Device is NEW make a new spot for it in the deviceMap
-                if (!deviceList[dev.id]) {
+                
+                if (!deviceList[dev.id]) { //If Device is NEW make a new spot for it in the deviceMap
                     addDevice(dev);
                 }
-                // console.log('key(' + dev.id + '):', dev.tags);
 
                 let prevState = deviceList[dev.id].state;
-                let prevUsage = convUsage(deviceList[dev.id].usage);
-                let currentUsage = convUsage(dev.w);
-                let usageDelta = convUsage(currentUsage) - convUsage(prevUsage);
 
                 //Don't go below 1 watt
                 if (convUsage(deviceList[dev.id].usage) < 1) {
                     deviceList[dev.id].usage = convUsage(1);
                 }
-
+                
                 if (dev.name !== "Other") {
                     if (prevState !== "on" && prevState !== "unknown") {
                         tsLogger('Device State Changed: ' + dev.name + " turned ON!");                    
                         deviceList[dev.id].recentlyChanged = true;
-                        deviceList[dev.id].lastOn = new Date();                        
-                    }
-                    if (prevUsage !== -1 && Math.abs(usageDelta) > usagePushThreshold) {
-                        tsLogger(dev.name + " usage changed by " + usageDelta);                    
+                        deviceList[dev.id].lastOn = new Date();
                     }
                 }
 
+                //Get other device info
                 deviceList[dev.id].state = "on";
                 deviceList[dev.id].usage = convUsage(dev.w);
                 deviceList[dev.id].currentlyOn = true;
@@ -426,6 +428,7 @@ function processData(data) {
                 }
             }
 
+            //Push device data into overall Sense Monitor device
             let otherMonData = {};
             if (Object.keys(data.payload.voltage).length) {
                 let v = [];
@@ -442,8 +445,9 @@ function processData(data) {
             otherMonData.hz = convUsage(data.payload.hz, 0);
             updateMonitorInfo(otherMonData);
 
-            //Convert list to array for easier parsing in ST
-            let devArray = [];
+            
+            let devArray = [];  //We'll convert object list to array for easier parsing in ST
+
             //Loop over saved list again and mark any remaining devices as off
             Object.keys(deviceList).forEach(function(key) {
                 if (key !== "SenseMonitor") {
@@ -461,7 +465,7 @@ function processData(data) {
                 devArray.push(deviceList[key]);
             });
             
-            lastPush = new Date();
+            lastPush = new Date();  //Take note of the last ST push timestamp
 
             //Split device into smaller chunks to make sure we don't exceed SmartThings limits
             let deviceGroups = [];
@@ -471,48 +475,45 @@ function processData(data) {
                 deviceGroups.push(deviceGroup);
             }
 
-            let options = {
-                method: 'POST',
-                uri: 'http://' + smartThingsHubIP + ':39500/event',
-                headers: { 'source': 'STSense' },
-                body: {
-                    'devices': deviceGroups[0],
-                    'timestamp': Date.now(),
-                    'serviceInfo': {
-                        'version': serverVersion,
-                        'sessionEvts': eventCount,
-                        'startupDt': getServiceUptime(),
-                        'ip': getIPAddress(),
-                        'port': callbackPort,
-                        'config': {
-                            'minSecBetweenPush': minSecBetweenPush,
-                            'maxSecBetweenPush': maxSecBetweenPush,
-                            'usagePushThreshold': usagePushThreshold,
-                            'smartThingsHubIP': smartThingsHubIP
-                        }
-                    },
-                    'totalUsage': data.payload.w,
-                    'frameId': data.payload.frame
+            let options = postOptions;
+            options.body =             
+            {
+                'devices': deviceGroups[0],
+                'timestamp': Date.now(),
+                'serviceInfo': {
+                    'version': serverVersion,
+                    'sessionEvts': eventCount,
+                    'startupDt': getServiceUptime(),
+                    'ip': getIPAddress(),
+                    'port': callbackPort,
+                    'config': {
+                        'minSecBetweenPush': minSecBetweenPush,
+                        'maxSecBetweenPush': maxSecBetweenPush,
+                        'usagePushThreshold': usagePushThreshold,
+                        'smartThingsHubIP': smartThingsHubIP
+                    }
                 },
-                json: true
-            };
+                'totalUsage': data.payload.w,
+                'frameId': data.payload.frame
+            }
+            
             if (smartThingsAppId !== undefined || smartThingsAppId !== '') {
                 options.headers.senseAppId = config.smartThingsAppId;
             }
-            //Send to SmartThings!
-            //tsLogger(`** Preparing to send ${devArray.length} devices to SmartThings! **`);
 
+            //****Send to SmartThings!****
+            //Send first group that also contains config info            
             request(options)
             .then(function() {
                 eventCount++;
-                tsLogger('** Sent (' + deviceGroups.length + ') Devices to SmartThings! | Usage: (' + convUsage(data.payload.w) + 'W) **');
+                tsLogger('** Sent (' + devArray.length + ') Devices to SmartThings! | Usage: (' + convUsage(data.payload.w) + 'W) **');
 
-                //Push other groups            
+                //Push other groups (if applicable)
                 deviceGroups.splice(0,1);
                 deviceGroups.forEach(devGroup => {
                     options.body = {"devices": devGroup}
                     request(options)
-                })                
+                })
 
                 currentlyProcessing = false;
             })
@@ -528,16 +529,13 @@ function processData(data) {
     
 }
 
+//Format usage
 function convUsage(val, rndTo = 2) {
     if (val !== -1) {
         val = parseFloat(val).toFixed(rndTo);
     }
     return val;
 }
-
-//var websocketPollingInterval = 60;  //Number of seconds between opening/closing the websocket
-//var refreshInterval = 300;  //Number of seconds between updating monitor data via API calls (not needed as frequently)
-
 
 function startWebServer() {
     app.set('port', callbackPort);
@@ -556,6 +554,7 @@ function startWebServer() {
         }
     });
     process.stdin.resume(); //so the program will not close instantly
+    
     //do something when app is closing
      process.on('exit', exitHandler.bind(null, {
          exit: true
