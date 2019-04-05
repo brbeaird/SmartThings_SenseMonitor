@@ -3,7 +3,7 @@
  *
  *	Author: Brian Beaird and Anthony Santilli
  *
- *  Copyright 2018 Brian Beaird and Anthony Santilli
+ *  Copyright 2019 Brian Beaird and Anthony Santilli
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -18,23 +18,23 @@
 import java.text.SimpleDateFormat
 include 'asynchttp_v1'
 
-String appVersion() { return "0.3.3" }
-String appModified() { return "2018-10-05"}
+String appVersion() { return "0.3.4" }
+String appModified() { return "2019-04-04"}
 String appAuthor() { return "Anthony Santilli & Brian Beaird" }
-String gitBranch() { return "tonesto7" }
+String gitBranch() { return "brbeaird" }
 String getAppImg(imgName) 	{ return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
 Map minVersions() { //These define the minimum versions of code this app will work with.
 	return [
-		monitorDevice: 032,
-		energyDevice: 032,
-		server: 030
+		monitorDevice: 033,
+		energyDevice: 033,
+		server: 040
 	]
 }
 
 definition(
 	name: "Sense Monitor App",
 	namespace: "brbeaird",
-	author: "Anthony Santilli",
+	author: "Anthony Santilli & Brian Beaird",
 	description: "Connects SmartThings with Sense",
 	category: "My Apps",
 	iconUrl: "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/sense.1x.png",
@@ -72,7 +72,7 @@ def mainPage() {
 			input "autoCreateDevices", "bool", title: "Auto Create New Devices?", description: "", required: false, defaultValue: true, submitOnChange: true, image: getAppImg("devices.png")
 			input "autoRenameDevices", "bool", title: "Rename Devices to Match Sense?", description: "", required: false, defaultValue: true, submitOnChange: true, image: getAppImg("name_tag.png")
 		}
-		
+
 		section("Device Filtering:") {
 			if(newInstall) {
 				paragraph title:"Notice:", "Device filtering options will be available once app install is complete.", required: true, state: null
@@ -129,10 +129,9 @@ def servPrefPage() {
 		}
 		if(settings?.stHub) {
 			section("Service Push Settings") {
-				input (name: "minSecBetweenPush", type: "number", title: "Minimum Wait Between Updates", description: "in Seconds...", required: false, defaultValue: 10, submitOnChange: true, image: getAppImg("delay_time.png"))
-				input (name: "maxSecBetweenPush", type: "number", title: "Maximum Wait Between Updates", description: "in Seconds...", required: false, defaultValue: 60, submitOnChange: true, image: getAppImg("delay_time.png"))
-				input (name: "usagePushThreshold", type: "number", title: "Usage Change to Trigger Update", description: "In Watts...", required: false, defaultValue: 200, submitOnChange: true, image: getAppImg("threshold.png"))
-				paragraph title: "Notice", "These changes will be applied on the next server data refresh."
+				input (name: "websocketPollingInterval", type: "number", title: "Time between websocket polling", description: "in Seconds...", required: false, defaultValue: 60, submitOnChange: true, image: getAppImg("delay_time.png"))
+				input (name: "refreshInterval", type: "number", title: "Time between monitor data refreshes", description: "in Seconds...", required: false, defaultValue: 300, submitOnChange: true, image: getAppImg("delay_time.png"))
+				paragraph title: "Notice", "Setting these lower than the default may trigger Sense rate limiting. These changes will be applied on the next server data refresh."
 			}
 		}
 		if(!newInstall && state?.nodeServiceInfo) {
@@ -192,7 +191,7 @@ def notifPrefPage() {
 					def misPollNotifyWaitValDesc = settings?.misPollNotifyWaitVal ?: "Default: 15 Minutes"
 					input (name: "misPollNotifyWaitVal", type: "enum", title: "Time Past the Missed Checkin?", required: false, defaultValue: 900, metadata: [values:notifValEnum()], submitOnChange: true, image: getAppImg("delay_time.png"))
 					if(settings?.misPollNotifyWaitVal) { pollWait = settings?.misPollNotifyWaitVal as Integer }
-					
+
 					def misPollNotifyMsgWaitValDesc = settings?.misPollNotifyMsgWaitVal ?: "Default: 1 Hour"
 					input (name: "misPollNotifyMsgWaitVal", type: "enum", title: "Send Reminder After?", required: false, defaultValue: 3600, metadata: [values:notifValEnum()], submitOnChange: true, image: getAppImg("reminder.png"))
 					if(settings?.misPollNotifyMsgWaitVal) { pollMsgWait = settings?.misPollNotifyMsgWaitVal as Integer }
@@ -309,7 +308,14 @@ private reInitDevices() {
 }
 
 def lanEventHandler(evt) {
-	def msg = parseLanMessage(evt.description)
+	def msg
+    try{
+            msg = parseLanMessage(evt.description)
+    }
+    catch (e){
+        	//log.debug "Not able to parse lan message: " + e
+            return 1
+    }
 	def headerMap = msg?.headers
 	//Filter out calls from other LAN devices
 	if (headerMap != null){
@@ -317,8 +323,8 @@ def lanEventHandler(evt) {
 			// log.debug "Non-sense data detected - ignoring."
 			return 0
 		}
-		if (headerMap?.source == "STSense" && headerMap?.senseAppId && headerMap?.senseAppId?.toString() != app?.getId()) { 
-			log.warn "STSense Data Recieved but it was meant for a different SmartAppId..." 
+		if (headerMap?.source == "STSense" && headerMap?.senseAppId && headerMap?.senseAppId?.toString() != app?.getId()) {
+			log.warn "STSense Data Recieved but it was meant for a different SmartAppId..."
 			return 0
 		}
 	}
@@ -332,9 +338,9 @@ def lanEventHandler(evt) {
 			log.debug "FYI - got a Sense response, but it's apparently not JSON. Error: " + e + ". Body: " + msg?.body
 			return 1
 		}
-		if(checkIfCodeUpdated()) { 
+		if(checkIfCodeUpdated()) {
 			log.warn "Possible Code Version Update Detected... Device Updates will occur on next cycle."
-			return 0 
+			return 0
 		}
 		//Check for minimum versions before processing
 		Boolean updRequired = false
@@ -344,18 +350,48 @@ def lanEventHandler(evt) {
 			if(codeVers && codeVers[k as String] && (versionStr2Int(codeVers[k as String]) < minVersions()[k as String])) { updRequired = true; updRequiredItems?.push("$v"); }
 		}
 
+        //When device ID array received, audit child devices to see if we should delete any stale children
+		if (result?.deviceIds) {
+        	getAllChildDevices().each { child ->
+                def devId =  child.deviceNetworkId.split("\\|")[2]
+                if (devId != "SenseMonitor" && !result.deviceIds.contains(devId)){
+                	log.debug "Found possible stale Sense device. Checking for recent events: ${child.label} (${devId})"
+                    def eventCount = 0
+                    def recentEvents = child.eventsSince(new Date() - 7)
+                    recentEvents.each { event ->
+                    	if (event.name != "DeviceWatch-DeviceStatus"){eventCount++}
+                    }
+                    if (eventCount == 0){
+                    	log.debug "No recent events found. Deleting ${child.label} (${devId})"
+                        deleteChildDevice(child.deviceNetworkId, true)
+					}
+                }
+            }
+		}
+
+		//When toggleDevices array received, toggle them on and off just to have a record of the event. This happens when devices turn on and off between polling intervals
+		if (result?.toggleIds) {
+        	result.toggleIds.each { toggleDevice ->
+            	def dni = [ app?.id, "senseDevice", toggleDevice].join('|')
+                log.debug "toggling " + dni
+                def childDevice = getChildDevice(dni)
+                childDevice?.toggleOn()
+                childDevice?.toggleOff()
+            }
+		}
+
 		List ignoreTheseDevs = settings?.senseDeviceFilter ?: []
 		if (result?.devices) {
 			Map senseDeviceMap = [:]
+            senseDeviceMap = state.senseDeviceMap
 			log.debug "Updating (${result?.devices?.size()}) Sense Devices..."
 			result?.devices?.each { senseDevice ->
 				Boolean isMonitor = (senseDevice?.id == "SenseMonitor")
-				
 				senseDeviceMap[senseDevice?.id] = senseDevice
 				// log.debug "senseDevice(${senseDevice.name}): ${senseDevice}"
-				if(senseDevice?.id in ignoreTheseDevs) { 
+				if(senseDevice?.id in ignoreTheseDevs) {
 					logger("warn", "skipping ${senseDevice?.name} because it is in the do not use list...")
-					return 
+					return
 				}
 				// logger("debug", "${senseDevice.name} | State: (${senseDevice?.state?.toString().toUpperCase()}) | Usage: ${senseDevice?.usage}W")
 				def dni = [ app?.id, (!isMonitor ? "senseDevice" : "senseMonitor"), senseDevice?.id].join('|')
@@ -383,8 +419,8 @@ def lanEventHandler(evt) {
 						}
 					} else {
 						//Check and see if name needs a refresh
-						if (settings?.autoRenameDevices != false && childDevice?.name != childHandlerName || childDevice?.label != fullName) {
-							log.debug ("Updating device name (old label was " + childDevice?.label + " | old name was " + childDevice?.name + " new hotness: " + fullName)
+						if (settings?.autoRenameDevices != false && (childDevice?.name != childHandlerName || childDevice?.label != fullName)) {
+                            log.debug ("Updating device name (old label was " + childDevice?.label + " | old name was " + childDevice?.name + " new name: " + fullName)
 							childDevice?.name = childHandlerName
 							childDevice?.label = fullName
 						}
@@ -394,7 +430,7 @@ def lanEventHandler(evt) {
 				// log.debug "------"
 				modCodeVerMap((isMonitor ? "monitorDevice" : "energyDevice"), childDevice?.devVersion()) // Update device versions in codeVersion state Map
 				state?.lastDevDataUpd = getDtNow()
-				
+
 			}
 			state?.senseDeviceMap = senseDeviceMap
 		}
@@ -405,8 +441,8 @@ def lanEventHandler(evt) {
 			if(srvcInfo?.config && srvcInfo?.config?.size()) {
 				srvcInfo?.config?.each { k,v->
 					if(settings?.containsKey(k as String)) {
-						if(settings[k as String] != v) { 
-							sendSetUpd = true 
+						if(settings[k as String] != v) {
+							sendSetUpd = true
 							log.debug "config($k) | Service: $v | App: ${settings[k as String]} | result: ${(srvVal != appVal)} | sendUpdate: ${sendSetUpd}"
 						}
 					}
@@ -430,7 +466,7 @@ private senseServiceUpdate() {
 	String host = ip && port ? "${ip}:${port}" : null
 	String smartThingsHubIp = settings?.stHub?.getLocalIP()
 	if(!host) { return }
-	
+
 	logger("trace", "senseServiceUpdate host: ${host}")
 	try {
 		def hubAction = new physicalgraph.device.HubAction(
@@ -438,9 +474,8 @@ private senseServiceUpdate() {
 			headers: [
 				"HOST": host,
 				"smartThingsHubIp": "${smartThingsHubIp}",
-				"usagePushThreshold": settings?.usagePushThreshold,
-				"maxSecBetweenPush": settings?.maxSecBetweenPush,
-				"minSecBetweenPush": settings?.minSecBetweenPush
+				"refreshInterval": settings?.refreshInterval,
+				"websocketPollingInterval": settings?.websocketPollingInterval
 			],
 			path: "/updateSettings",
 			body: ""
@@ -549,7 +584,7 @@ Boolean quietDaysOk(days) {
 }
 
 // Sends the notifications based on app settings
-public sendMsg(String msgTitle, String msg, Boolean showEvt=true, Map pushoverMap=null, sms=null, push=null) { 
+public sendMsg(String msgTitle, String msg, Boolean showEvt=true, Map pushoverMap=null, sms=null, push=null) {
 	logger("trace", "sendMsg() | msgTitle: ${msgTitle}, msg: ${msg}, showEvt: ${showEvt}")
 	String sentstr = "Push"
 	Boolean sent = false
@@ -587,7 +622,7 @@ public sendMsg(String msgTitle, String msg, Boolean showEvt=true, Map pushoverMa
 					} else {
 						sendSmsMessage(phone?.trim(), t0)	// send SMS
 					}
-					
+
 				}
 				sentstr = "Text Message to Phone [${phones}]"
 				sent = true
@@ -828,10 +863,9 @@ String getServiceConfDesc() {
 	String str = ""
 	str += (settings?.stHub) ? "${str != "" ? "\n" : ""}Hub Info:" : ""
 	str += (settings?.stHub) ? "${str != "" ? "\n" : ""} • IP: ${settings?.stHub?.getLocalIP()}" : ""
-	str += (settings?.usagePushThreshold || settings?.minSecBetweenPush || settings?.maxSecBetweenPush) ? "\n\nServer Push Settings:" : ""
-	str += (settings?.usagePushThreshold) ? "${str != "" ? "\n" : ""} • Usage Threshold : (${settings?.usagePushThreshold}W)" : ""
-	str += (settings?.minSecBetweenPush) ? "${str != "" ? "\n" : ""} • Minimum Wait: (${settings?.minSecBetweenPush}sec)" : ""
-	str += (settings?.maxSecBetweenPush) ? "${str != "" ? "\n" : ""} • Maximum Wait: (${settings?.maxSecBetweenPush}sec)" : ""
+	str += (settings?.websocketPollingInterval || settings?.refreshInterval) ? "\n\nServer Push Settings:" : ""
+	str += (settings?.websocketPollingInterval) ? "${str != "" ? "\n" : ""} • Websocket Poll Interval: (${settings?.websocketPollingInterval}sec)" : ""
+	str += (settings?.refreshInterval) ? "${str != "" ? "\n" : ""} • Monitor Refresh Interval: (${settings?.refreshInterval}sec)" : ""
 	return str != "" ? str : null
 }
 
@@ -843,7 +877,7 @@ String getAppNotifDesc() {
 }
 
 String getServInfoDesc() {
-	Map rData = state?.nodeServiceInfo	
+	Map rData = state?.nodeServiceInfo
 	String str = ""
 	String dtstr = ""
 	if(rData?.startupDt) {

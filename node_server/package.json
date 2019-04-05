@@ -10,10 +10,11 @@
     "author": "",
     "license": "ISC",
     "dependencies": {
+        "express": "^4.16.4",
+        "node-datetime": "^2.1.2",
+        "node-fetch": "^2.3.0",
         "request": "^2.88.0",
-        "request-promise": "^4.2.2",
-        "unofficial-sense": "^1.1.4",
-        "express": "^4.16.3",
-        "node-datetime": "^2.0.9"
+        "request-promise": "^4.2.4",
+        "ws": "^6.2.1"
     }
 }

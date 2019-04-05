@@ -2,10 +2,11 @@
  *	Sense Device
  *
  *	Author: Brian Beaird and Anthony Santilli
+ *  Last Updated: 2019-04-04
  *
  ***************************
  *
- *  Copyright 2018 Brian Beaird and Anthony Santilli
+ *  Copyright 2019 Brian Beaird and Anthony Santilli
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -20,12 +21,12 @@
 
 import java.text.SimpleDateFormat
 String devVersion() { return "0.3.3"}
-String devModified() { return "2018-11-05"}
-String gitAuthor() { return "tonesto7" }
+String devModified() { return "2019-04-04"}
+String gitAuthor() { return "brbeaird" }
 String getAppImg(imgName) { return "https://raw.githubusercontent.com/${gitAuthor()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
 
 metadata {
-    definition (name: "Sense Energy Device", namespace: "brbeaird", author: "Anthony Santilli", vid: "generic-power") {
+    definition (name: "Sense Energy Device", namespace: "brbeaird", author: "Anthony Santilli & Brian Beaird", vid: "generic-power") {
         capability "Power Meter"
         capability "Switch"
         capability "Actuator"
@@ -160,6 +161,15 @@ def off() {
     // state.lastTurnedOff = now()
 }
 
+def toggleOn(){
+	log.debug "toggled on"
+    sendEvent(name: "switch", value: "on", display: true, displayed: true, isStateChange: true, descriptionText: device?.displayName + " was on")
+}
+
+def toggleOff(){
+log.debug "toggled off"
+	sendEvent(name: "switch", value: "off", display: true, displayed: true, isStateChange: true, descriptionText: device?.displayName + " was off")
+}
 private resetOnCount() {
     log.trace "resetOnCount"
     state?.onCountToday = 0
@@ -318,14 +328,12 @@ def updateDeviceStatus(Map senseDevice){
     
     // log.debug "currentPower: ${currentPower} | oldPower: ${oldPower}"
     if (oldPower != currentPower) {
-        Boolean isUsageChange = true
-        def usageChange = (currentPower - oldPower)?.abs()
-        if (devName == "Other" && usageChange < 30 && currentPower != 0) { isUsageChange = false }
-        if (devName == "TotalUsage" && usageChange < 50 && currentPower != 0) { isUsageChange = false }
-
         if (isStateChange(device, "power", currentPower?.toString())) {
             logger("debug", "Updating Power Usage from ${oldPower}W to ${currentPower}W")
-            sendEvent(name: "power", value: currentPower, units: "W", descriptionText: "Power Usage is ${currentPower}W", display: true, displayed: true, isStateChange: true)
+            def showlog = false
+            if (usageChange > 100)
+            	showlog = true
+            sendEvent(name: "power", value: currentPower, units: "W", display: showlog, displayed: showlog, isStateChange: true)
         }
     }
     setOnlineStatus((senseDevice?.revoked == true) ? false : true)

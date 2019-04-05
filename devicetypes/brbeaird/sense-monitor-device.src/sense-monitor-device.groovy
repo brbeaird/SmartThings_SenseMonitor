@@ -2,6 +2,7 @@
  *	Sense Monitor Device
  *
  *	Author: Brian Beaird and Anthony Santilli
+ *  Last Updated: 2019-04-04
  *
  ***************************
  *
@@ -19,13 +20,13 @@
  */
 
 import java.text.SimpleDateFormat
-String devVersion() { return "0.3.2"}
-String devModified() { return "2018-10-03"}
-String gitAuthor() { return "tonesto7" }
+String devVersion() { return "0.3.3"}
+String devModified() { return "2019-04-04"}
+String gitAuthor() { return "brbeaird" }
 String getAppImg(imgName) { return "https://raw.githubusercontent.com/${gitAuthor()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
 
 metadata {
-    definition (name: "Sense Monitor Device", namespace: "brbeaird", author: "Anthony Santilli", vid: "generic-power") {
+    definition (name: "Sense Monitor Device", namespace: "brbeaird", author: "Anthony Santilli & Brian Beaird", vid: "generic-power") {
         capability "Power Meter"
         capability "Sensor"
         
@@ -42,7 +43,7 @@ metadata {
         attribute "detectionsPending", "string"
     }
 
-    preferences { 
+    preferences {
         input "showLogs", "bool", required: false, title: "Show Debug Logs?", defaultValue: false
     }
 
@@ -136,14 +137,17 @@ def updateDeviceStatus(Map senseDevice){
     senseDevice?.monitorData?.each { k,v ->
         logger("debug", "$k: $v")
     }
-    
+
     Float currentPower = senseDevice?.usage?.isNumber() ? senseDevice?.usage as Float : 0.0
     Float oldPower = device.currentState("power")?.floatValue ?: -1
     if (oldPower != currentPower) {
         def usageChange = (currentPower - oldPower).abs()
         if (isStateChange(device, "power", currentPower?.toString())) {
             logger("debug", "Updating usage from $oldPower to $currentPower")
-            sendEvent(name: "power", value: currentPower, units: "W", display: true, displayed: true, isStateChange: true)
+            def showlog = false
+            if (usageChange > 100)
+            	showlog = true
+            sendEvent(name: "power", value: currentPower, units: "W", display: showlog, displayed: showlog, isStateChange: true)
         }
     }
     // log.debug "usage: ${senseDevice?.usage} | currentPower: $currentPower | oldPower: ${oldPower}"
@@ -173,6 +177,7 @@ def updateDeviceStatus(Map senseDevice){
         if(isStateChange(device, "phase2Usage", phaseUse2?.toString())) {
             sendEvent(name: "phase2Usage", value: phaseUse2?.toString(), display: false, displayed: false)
         }
+
         String hz = senseDevice?.monitorData?.hz ?: "Not Set"
         if(isStateChange(device, "cycleHz", hz?.toString())) {
             sendEvent(name: "cycleHz", value: hz?.toString(), display: true, displayed: true)
@@ -183,8 +188,20 @@ def updateDeviceStatus(Map senseDevice){
         }
         String signal = senseDevice?.monitorData?.wifi_signal ?: "Not Set"
         if(isStateChange(device, "wifi_signal", signal?.toString())) {
-            sendEvent(name: "wifi_signal", value: signal?.toString(), display: true, displayed: true)
-        }
+        	Float currentSignal = senseDevice?.monitorData?.wifi_signal?.split()[0].isNumber() ? senseDevice?.monitorData?.wifi_signal.split()[0] as Float : 0.0
+            Float oldSignal = -1
+            if (device.currentState("wifi_signal")){
+            	oldSignal = device.currentState("wifi_signal")?.stringValue?.split()[0] as Float ?: -1.0
+            }
+
+            log.debug "oldSignal " + oldSignal
+            def showSignalLog = false
+            def signalChange = (currentSignal - oldSignal).abs()
+            if (signalChange > 5)
+                showSignalLog = true
+                sendEvent(name: "wifi_signal", value: signal?.toString(), display: showSignalLog, displayed: showSignalLog)
+            }
+
         String netDetect = (senseDevice?.monitorData?.ndt_enabled == true) ? "Enabled" : "Disabled"
         if(isStateChange(device, "networkDetection", netDetect?.toString())) {
             sendEvent(name: "networkDetection", value: netDetect?.toString(), display: true, displayed: true)
