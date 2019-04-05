@@ -19,7 +19,7 @@ const setupWS = (onData) => {
     try {
         const sendData = typeof onData == 'function'
         let WSURL = `wss://clientrt.sense.com/monitors/${authData.monitors[0].id}/realtimefeed?access_token=${authData.access_token}`
-        senseWS = new ws(WSURL)    
+        senseWS = new ws(WSURL)
 
         senseWS.on('open', () => {
             if(sendData) {
@@ -29,7 +29,7 @@ const setupWS = (onData) => {
             }
         });
         senseWS.on('message', (data) => {
-            emmitter.emit('data', JSON.parse(data));            
+            emmitter.emit('data', JSON.parse(data));
             if(sendData) {
                 onData({
                     status: "Received",
@@ -40,7 +40,7 @@ const setupWS = (onData) => {
             }
         });
         senseWS.onclose = (data) => {
-            emmitter.emit('close', data);        
+            emmitter.emit('close', data);
             if (verbose){console.log("Connection closed: " + data);}
         };
         senseWS.onerror = (data) => {
@@ -49,14 +49,14 @@ const setupWS = (onData) => {
         };
     } catch (error) {
         console.log(error);
-    }    
+    }
 }
 
 var authData = {};
 
 
-module.exports = 
-    
+module.exports =
+
     //Constructor
     async (config, onData) => {
     return new Promise( async (resolve, reject) => {
@@ -68,9 +68,9 @@ module.exports =
                 config.password = Buffer.from(config.password.toString('base64'))
             }
             if (config.verbose != undefined){verbose = config.verbose};
-    
+
             if (config.access_token){
-                authData = {"access_token":config.access_token, user_id: config.user_id, authorized: true, monitors: [{id:33218}]}
+                authData = {"access_token":config.access_token, user_id: config.user_id, authorized: true, monitors: [{id:0}]}
             }
             else{
                 authData = await doAuth();
@@ -88,7 +88,7 @@ module.exports =
                     }
                 })
             }
-    
+
             //Only proceed if auth succeeded
             if(authData.authorized) {
                 if(typeof onData == 'function') {
@@ -116,10 +116,10 @@ module.exports =
 
                 //Final resolve - list of exposed methods
                 resolve({
-                                    
+
                     authData: authData,
                     events: emmitter,
-                    
+
                     openStream: () => {
                         setupWS(onData);
                     },
@@ -127,29 +127,28 @@ module.exports =
                     closeStream: () => {
                         senseWS.close();
                     },
-                    
-                    getAuth: async () => { 
-                        return authData = await doAuth();                        
+
+                    getAuth: async () => {
+                        return authData = await doAuth();
                     },
-                    
+
                     getDevices: async () => {
                         return doSenseCallout(`${apiURL}app/monitors/${authData.monitors[0].id}/devices`);},
 
-                    getMonitorInfo: async () => {                        
+                    getMonitorInfo: async () => {
                         return doSenseCallout(`${apiURL}app/monitors/${authData.monitors[0].id}/status`);
                     },
                     getTimeline: async () => {
-                        return doSenseCallout(`${apiURL}users/${authData.user_id}/timeline`);                        
+                        return doSenseCallout(`${apiURL}users/${authData.user_id}/timeline`);
                     }
                 })
-            } else if(authData.status == 'error') {                
+            } else if(authData.status == 'error') {
                 reject(new Error(authData.error_reason));
-            } else {                
+            } else {
                 reject(new Error('Unable to make auth request'));
             }
         } catch (error) {
             reject(error);
-        }        
+        }
     });
 }
-
