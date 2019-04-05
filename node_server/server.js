@@ -183,13 +183,19 @@ function addDevice(data) {
 
 //Handles periodic refresh tasks that run less frequently
 function periodicRefresh(){
-    tsLogger('Refreshing monitor data...');
+    tsLogger('Refreshing monitor data, monitor data, and missed events...');
     mySense.getMonitorInfo()
         .then(monitor => {
             monitorData = monitor;
             updateMonitorInfo();
         })
 
+    refreshDeviceList();
+    getMissedEvents();
+}
+
+//Refresh device list from Sense and send a list of the ID's to ST to check for stale devices
+function refreshDeviceList(){
     mySense.getDevices().then(devices => {
         for (let dev of devices) {
             if (!deviceList[dev.id]) {
@@ -197,24 +203,15 @@ function periodicRefresh(){
             }
         }
     }).then(() => {
-        let options =
-        {
-            method: 'POST',
-            uri: 'http://' + smartThingsHubIP + ':39500/event',
-            headers: { 'source': 'STSense' },
-            body: {
-                "deviceIds": JSON.stringify(deviceIdList)
-
-            },
-            json: true
+        if (deviceIdList.length > 0){
+            let options = postOptions;
+            options.body = {"deviceIds": JSON.stringify(deviceIdList)}
+            request(options);
         }
-        request(options)
     });
-
-    getMissedEvents();
 }
 
-//Checks Sense Timeline for short-lived on/off events that may have been missed
+//Checks Sense Timeline for short-lived on/off events that may have been missed; send any missed events to ST
 function getMissedEvents(){
     try {
         let missedToggles = [];
