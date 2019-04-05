@@ -41,7 +41,7 @@ var currentlyProcessing = false;
 var deviceList = {};
 var monitorData = {};
 var deviceIdList = [];
-var missedToggles = [];
+//var missedToggles = [];
 var serviceStartTime = Date.now(); //Returns time in millis
 var eventCount = 0; //Keeps a tally of how many times data was sent to ST in the running sessions
 
@@ -51,6 +51,40 @@ lastPush.setDate(lastPush.getDate() - 1);
 function tsLogger(msg) {
     let dt = new Date().toLocaleString();
     console.log(dt + ' | ' + msg);
+}
+
+function getMissedEvents(){
+    try {        
+        ////     getMissedEvents(timeline.items);            
+        let missedToggles = [];
+        mySense.getTimeline().then(timeline => {
+            timeline.items.map(event => {
+                //if (event.device_name == "Flood Lights"){
+                if (event.type == "DeviceWasOn" && Date.parse(event.start_time) > deviceList[event.device_id].lastOn){
+                    tsLogger(`Missed toggle event detected for ${event.device_name} (${event.device_id})`);
+                    missedToggles.push(event.device_id);
+                    deviceList[event.device_id].lastOn = new Date().getTime();
+                }
+            })
+            if (missedToggles.length > 0){
+                let options = 
+                {
+                    method: 'POST',
+                    uri: 'http://' + smartThingsHubIP + ':39500/event',
+                    headers: { 'source': 'STSense' },
+                    body: {
+                        "toggleIds": missedToggles
+                        
+                    },
+                    json: true
+                }
+                request(options)
+            }            
+        })            
+        
+    } catch (error) {
+        tsLogger(error.stack);
+    }
 }
 
 function addDevice(data) {
@@ -68,11 +102,12 @@ function addDevice(data) {
             let isGuess = (data.tags && data.tags.NameUserGuess && data.tags.NameUserGuess === 'true');
             let devData = {
                 id: data.id,
-                name: (isGuess ? data.name + ' (?)' : data.name),
+                name: (isGuess ? data.name.trim() + ' (?)' : data.name.trim()),
                 state: "unknown",
                 usage: -1,
                 currentlyOn: false,
-                recentlyChanged: true
+                recentlyChanged: true,
+                lastOn: new Date().getTime()
             };
 
             if (data.id !== "SenseMonitor") {
@@ -190,15 +225,12 @@ function periodicRefresh(){
             },
             json: true
         }
-        request(options)          
+        request(options)
     });
+
+    getMissedEvents();
 }
 
-// function getMissedEvents(timeline){
-    
-//     var test = 1;
-//     //missedToggles
-// }
 
 //Attempt to refresh auth
 function refreshAuth(){
@@ -258,18 +290,6 @@ async function startSense(){
             }            
         });
 
-        // await mySense.getTimeline().then(timeline => {            
-        //     if (timeline.items){
-        //         var lastPush1 = new Date();
-        //         timeline.items.map(event => {
-        //             if (event.type == "DeviceWasOn"){
-        //                 missedToggles.add(event.device_id);                        
-        //             }
-        //         })
-        //     }            
-        // })
-        
-
         //Get monitor info
         await mySense.getMonitorInfo()
         .then(monitor => {
@@ -289,6 +309,7 @@ async function startSense(){
 
             //Set processing flag so we only send through and process one at a time
             if (data.type === "realtime_update" && data.payload && data.payload.devices) {
+                mySense.closeStream();
                 if (currentlyProcessing){
                     return 0;
                 }
@@ -336,10 +357,7 @@ async function startSense(){
 
 function processData(data) {
     try {        
-    
         if (data.payload && data.payload.devices) {
-            mySense.closeStream();          
-            
 
             //Mark off saved list so we can detect which have been seen lately
             Object.keys(deviceList).forEach(function(key) {
@@ -374,6 +392,7 @@ function processData(data) {
                     if (prevState !== "on" && prevState !== "unknown") {
                         tsLogger('Device State Changed: ' + dev.name + " turned ON!");                    
                         deviceList[dev.id].recentlyChanged = true;
+                        deviceList[dev.id].lastOn = new Date();                        
                     }
                     if (prevUsage !== -1 && Math.abs(usageDelta) > usagePushThreshold) {
                         tsLogger(dev.name + " usage changed by " + usageDelta);                    
@@ -406,6 +425,23 @@ function processData(data) {
                     }
                 }
             }
+
+            let otherMonData = {};
+            if (Object.keys(data.payload.voltage).length) {
+                let v = [];
+                v.push(convUsage(data.payload.voltage[0], 1));
+                v.push(convUsage(data.payload.voltage[1], 1));
+                otherMonData.voltage = v;
+            }
+            if (Object.keys(data.payload.channels).length) {
+                let phaseUse = [];
+                phaseUse.push(convUsage(data.payload.channels[0], 2));
+                phaseUse.push(convUsage(data.payload.channels[1], 2));
+                otherMonData.phaseUsage = phaseUse;
+            }
+            otherMonData.hz = convUsage(data.payload.hz, 0);
+            updateMonitorInfo(otherMonData);
+
             //Convert list to array for easier parsing in ST
             let devArray = [];
             //Loop over saved list again and mark any remaining devices as off
@@ -424,22 +460,7 @@ function processData(data) {
                 }
                 devArray.push(deviceList[key]);
             });
-
-            let otherMonData = {};
-            if (Object.keys(data.payload.voltage).length) {
-                let v = [];
-                v.push(convUsage(data.payload.voltage[0], 1));
-                v.push(convUsage(data.payload.voltage[1], 1));
-                otherMonData.voltage = v;
-            }
-            if (Object.keys(data.payload.channels).length) {
-                let phaseUse = [];
-                phaseUse.push(convUsage(data.payload.channels[0], 2));
-                phaseUse.push(convUsage(data.payload.channels[1], 2));
-                otherMonData.phaseUsage = phaseUse;
-            }
-            otherMonData.hz = convUsage(data.payload.hz, 0);
-            updateMonitorInfo(otherMonData);
+            
             lastPush = new Date();
 
             //Split device into smaller chunks to make sure we don't exceed SmartThings limits
@@ -501,7 +522,8 @@ function processData(data) {
             });
         }
     } catch (error) {
-        tsLogger(error + ' ' + error.stack);    
+        tsLogger(error + ' ' + error.stack);
+        currentlyProcessing = false;
     }     
     
 }
