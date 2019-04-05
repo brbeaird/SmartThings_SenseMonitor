@@ -383,6 +383,7 @@ def lanEventHandler(evt) {
 		List ignoreTheseDevs = settings?.senseDeviceFilter ?: []
 		if (result?.devices) {
 			Map senseDeviceMap = [:]
+            senseDeviceMap = state.senseDeviceMap
 			log.debug "Updating (${result?.devices?.size()}) Sense Devices..."
 			result?.devices?.each { senseDevice ->
 				Boolean isMonitor = (senseDevice?.id == "SenseMonitor")
@@ -863,8 +864,8 @@ String getServiceConfDesc() {
 	str += (settings?.stHub) ? "${str != "" ? "\n" : ""}Hub Info:" : ""
 	str += (settings?.stHub) ? "${str != "" ? "\n" : ""} • IP: ${settings?.stHub?.getLocalIP()}" : ""
 	str += (settings?.websocketPollingInterval || settings?.refreshInterval) ? "\n\nServer Push Settings:" : ""
-	str += (settings?.websocketPollingInterval) ? "${str != "" ? "\n" : ""} • Minimum Wait: (${settings?.websocketPollingInterval}sec)" : ""
-	str += (settings?.refreshInterval) ? "${str != "" ? "\n" : ""} • Maximum Wait: (${settings?.refreshInterval}sec)" : ""
+	str += (settings?.websocketPollingInterval) ? "${str != "" ? "\n" : ""} • Websocket Poll Interval: (${settings?.websocketPollingInterval}sec)" : ""
+	str += (settings?.refreshInterval) ? "${str != "" ? "\n" : ""} • Monitor Refresh Interval: (${settings?.refreshInterval}sec)" : ""
 	return str != "" ? str : null
 }
 

@@ -39,7 +39,9 @@ websocket checks. Each of these calls then POSTs an update to the hub.
 ***************************************************************************************************************************************/
 
 var websocketPollingInterval = 60;  //Number of seconds between opening/closing the websocket
+var webSocketScheduler;
 var refreshInterval = 300;  //Number of seconds between updating monitor data via API calls (not needed as frequently)
+var monitorRefreshScheduler;
 
 //Global Variables
 var mySense;                        //Main Sense API object
@@ -112,18 +114,10 @@ async function startSense(){
 
         //Open websocket flow (and re-open again on an interval)
         mySense.openStream();
-        setInterval(() => {
-            //tsLogger(`Opening websocket...`)
-            mySense.openStream();
-        }, websocketPollingInterval * 1000);
 
-
-        //Wait 30 seconds (so this offset from the websocket intervals), then set up recurring refresh
-        setTimeout(() => {
-            setInterval(() => {
-                periodicRefresh();
-            }, refreshInterval * 1000);
-        }, 30000);
+        //Set up schedules
+        scheduleWebsocketPoll();
+        scheduleMonitorRefresh();
 
     } catch (error) {
         tsLogger(`FATAL ERROR: ${error}`);
@@ -132,6 +126,23 @@ async function startSense(){
         }
         process.exit();
     }
+}
+
+function scheduleWebsocketPoll(){
+    let interval = websocketPollingInterval && websocketPollingInterval > 10 ? websocketPollingInterval : 60;
+    webSocketScheduler = setInterval(() => {
+        mySense.openStream();
+    }, interval * 1000);
+}
+
+function scheduleMonitorRefresh(){
+    //Wait 30 seconds (so this offset from the websocket intervals), then set up recurring refresh
+    let interval = refreshInterval && refreshInterval > 10 ? refreshInterval : 300;
+    setTimeout(() => {
+        monitorRefreshScheduler = setInterval(() => {
+            periodicRefresh();
+        }, interval * 1000);
+    }, 30000);
 }
 
 //Add a device to our local device list
@@ -532,6 +543,15 @@ function getIPAddress() {
     return '0.0.0.0';
 }
 
+function resetWebsocketSchedule(){
+    clearInterval(webSocketScheduler);
+    scheduleWebsocketPoll();
+}
+
+function resetMonitorRefreshSchedule(){
+    clearInterval(monitorRefreshScheduler);
+    scheduleMonitorRefresh();
+}
 
 function startWebServer() {
     app.set('port', callbackPort);
@@ -539,14 +559,20 @@ function startWebServer() {
         tsLogger('Sense Monitor Service (v' + serverVersion + ') is Running at (IP: ' + getIPAddress() + ' | Port: ' + callbackPort + ') | ProcessId: ' + process.pid);
     });
     app.post('/updateSettings', function(req, res) {
-        tsLogger('** Settings Update Received from SmartThings **');
-        if (req.headers.websocketPollingInterval !== undefined && parseInt(req.headers.websocketPollingInterval) !== websocketPollingInterval) {
-            tsLogger('++ Changed Setting (websocketPollingInterval) | New Value: (' + req.headers.websocketPollingInterval + ') | Old Value: (' + websocketPollingInterval + ') ++');
-            websocketPollingInterval = parseInt(req.headers.websocketPollingInterval);
-        }
-        if (req.headers.refreshInterval !== undefined && parseInt(req.headers.refreshInterval) !== refreshInterval) {
-            tsLogger('++ Changed Setting (refreshInterval) | New Value: (' + req.headers.refreshInterval + ') | Old Value: (' + refreshInterval + ') ++');
-            refreshInterval = parseInt(req.headers.refreshInterval);
+        try {
+            tsLogger('** Settings Update Received from SmartThings **');
+            if (req.headers.websocketpollinginterval !== undefined && parseInt(req.headers.websocketpollinginterval) !== websocketPollingInterval) {
+                tsLogger('++ Changed Setting (websocketPollingInterval) | New Value: (' + req.headers.websocketpollinginterval + ') | Old Value: (' + websocketPollingInterval + ') ++');
+                websocketPollingInterval = parseInt(req.headers.websocketpollinginterval);
+                resetWebsocketSchedule();
+            }
+            if (req.headers.refreshinterval !== undefined && parseInt(req.headers.refreshinterval) !== refreshInterval) {
+                tsLogger('++ Changed Setting (refreshInterval) | New Value: (' + req.headers.refreshinterval + ') | Old Value: (' + refreshInterval + ') ++');
+                refreshInterval = parseInt(req.headers.refreshinterval);
+                resetMonitorRefreshSchedule();
+            }
+        } catch (error) {
+            tsLogger(error + error.stack);
         }
     });
     process.stdin.resume(); //so the program will not close instantly
