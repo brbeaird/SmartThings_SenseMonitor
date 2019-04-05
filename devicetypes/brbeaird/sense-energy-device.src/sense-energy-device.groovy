@@ -161,6 +161,15 @@ def off() {
     // state.lastTurnedOff = now()
 }
 
+def toggleOn(){
+	log.debug "toggled on"
+    sendEvent(name: "switch", value: "on", display: true, displayed: true, isStateChange: true, descriptionText: device?.displayName + " was on")
+}
+
+def toggleOff(){
+log.debug "toggled off"
+	sendEvent(name: "switch", value: "off", display: true, displayed: true, isStateChange: true, descriptionText: device?.displayName + " was off")
+}
 private resetOnCount() {
     log.trace "resetOnCount"
     state?.onCountToday = 0
@@ -319,12 +328,12 @@ def updateDeviceStatus(Map senseDevice){
     
     // log.debug "currentPower: ${currentPower} | oldPower: ${oldPower}"
     if (oldPower != currentPower) {
-        if (isStateChange(device, "power", currentPower?.toString())) {            
+        if (isStateChange(device, "power", currentPower?.toString())) {
             logger("debug", "Updating Power Usage from ${oldPower}W to ${currentPower}W")
-            def showlog = false            
+            def showlog = false
             if (usageChange > 100)
             	showlog = true
-            sendEvent(name: "power", value: currentPower, units: "W", display: showlog, displayed: showlog, isStateChange: true)            
+            sendEvent(name: "power", value: currentPower, units: "W", display: showlog, displayed: showlog, isStateChange: true)
         }
     }
     setOnlineStatus((senseDevice?.revoked == true) ? false : true)

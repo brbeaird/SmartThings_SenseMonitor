@@ -43,7 +43,7 @@ metadata {
         attribute "detectionsPending", "string"
     }
 
-    preferences { 
+    preferences {
         input "showLogs", "bool", required: false, title: "Show Debug Logs?", defaultValue: false
     }
 
@@ -137,14 +137,14 @@ def updateDeviceStatus(Map senseDevice){
     senseDevice?.monitorData?.each { k,v ->
         logger("debug", "$k: $v")
     }
-    
+
     Float currentPower = senseDevice?.usage?.isNumber() ? senseDevice?.usage as Float : 0.0
     Float oldPower = device.currentState("power")?.floatValue ?: -1
     if (oldPower != currentPower) {
         def usageChange = (currentPower - oldPower).abs()
         if (isStateChange(device, "power", currentPower?.toString())) {
             logger("debug", "Updating usage from $oldPower to $currentPower")
-            def showlog = false            
+            def showlog = false
             if (usageChange > 100)
             	showlog = true
             sendEvent(name: "power", value: currentPower, units: "W", display: showlog, displayed: showlog, isStateChange: true)
@@ -177,6 +177,7 @@ def updateDeviceStatus(Map senseDevice){
         if(isStateChange(device, "phase2Usage", phaseUse2?.toString())) {
             sendEvent(name: "phase2Usage", value: phaseUse2?.toString(), display: false, displayed: false)
         }
+
         String hz = senseDevice?.monitorData?.hz ?: "Not Set"
         if(isStateChange(device, "cycleHz", hz?.toString())) {
             sendEvent(name: "cycleHz", value: hz?.toString(), display: true, displayed: true)
@@ -192,7 +193,7 @@ def updateDeviceStatus(Map senseDevice){
             if (device.currentState("wifi_signal")){
             	oldSignal = device.currentState("wifi_signal")?.stringValue?.split()[0] as Float ?: -1.0
             }
-            
+
             log.debug "oldSignal " + oldSignal
             def showSignalLog = false
             def signalChange = (currentSignal - oldSignal).abs()
@@ -200,7 +201,7 @@ def updateDeviceStatus(Map senseDevice){
                 showSignalLog = true
                 sendEvent(name: "wifi_signal", value: signal?.toString(), display: showSignalLog, displayed: showSignalLog)
             }
-            
+
         String netDetect = (senseDevice?.monitorData?.ndt_enabled == true) ? "Enabled" : "Disabled"
         if(isStateChange(device, "networkDetection", netDetect?.toString())) {
             sendEvent(name: "networkDetection", value: netDetect?.toString(), display: true, displayed: true)
