@@ -62,234 +62,7 @@ var postOptions = {                 //Basic template for POSTing to SmartThings
 var lastPush = new Date();
 lastPush.setDate(lastPush.getDate() - 1);
 
-//Logging with timestamp
-function tsLogger(msg) {
-    let dt = new Date().toLocaleString();
-    console.log(dt + ' | ' + msg);
-}
-
-function getMissedEvents(){
-    try {        
-        let missedToggles = [];
-        mySense.getTimeline().then(timeline => {
-            timeline.items.map(event => {                
-                if (event.type == "DeviceWasOn" && Date.parse(event.start_time) > deviceList[event.device_id].lastOn){
-                    tsLogger(`Missed toggle event detected for ${event.device_name} (${event.device_id})`);
-                    missedToggles.push(event.device_id);
-                    deviceList[event.device_id].lastOn = new Date().getTime();
-                }
-            })
-            
-            //Post missed events to SmartThings so we can toggle those on and off
-            if (missedToggles.length > 0){
-                let options = postOptions;
-                postOptions.body = {"toggleIds": missedToggles}            
-                request(options)
-            }            
-        })            
-        
-    } catch (error) {
-        tsLogger(error.stack);
-    }
-}
-
-//Add a device to our local device list
-function addDevice(data) {
-    try {        
-        if (data.id === "SenseMonitor") {   //The monitor device itself is treated differently
-            deviceList[data.id] = data;
-        } else {
-            
-            //Ignore devices that are hidden on the Sense app (usually merged devices)
-            if (data.tags.DeviceListAllowed == "false"){                
-                return 0
-            }
-            
-            tsLogger("Adding New Device: (" + data.name + ") to DevicesList...");        
-            let isGuess = (data.tags && data.tags.NameUserGuess && data.tags.NameUserGuess === 'true');
-            let devData = {
-                id: data.id,
-                name: (isGuess ? data.name.trim() + ' (?)' : data.name.trim()),
-                state: "unknown",
-                usage: -1,
-                currentlyOn: false,
-                recentlyChanged: true,
-                lastOn: new Date().getTime()
-            };
-
-            if (data.id !== "SenseMonitor") {
-                devData.location = data.location || "";
-                devData.make = data.make || "";
-                devData.model = data.model || "";
-                devData.icon = data.icon || "";
-                if (data.tags) {
-                    devData.mature = (data.tags.Mature === "true") || false;
-                    devData.revoked = (data.tags.Revoked === "true") || false;
-                    devData.dateCreated = data.tags.DateCreated || "";
-                }
-            }
-            deviceList[data.id] = devData;
-            deviceIdList.push(data.id);
-        }
-    } catch (error) {
-        tsLogger(error.stack);
-    }
-    
-}
-
-//Handle process closing
-function exitHandler(options, err) {
-    console.log('exitHandler: (PID: ' + process.pid + ')', options, err);
-    if (options.cleanup) {
-        tsLogger('exitHandler: ', 'ClosedByUserConsole');
-    } else if (err) {
-        tsLogger('exitHandler error', err);
-        if (options.exit) process.exit(1);
-    }
-    process.exit();
-}
-
-//Handle graceful shutdown
-var gracefulStopNoMsg = function() {
-    tsLogger('gracefulStopNoMsg: ', process.pid);
-    console.log('graceful setting timeout for PID: ' + process.pid);
-    setTimeout(function() {
-        console.error("Could not close connections in time, forcefully shutting down");
-        process.exit(1);
-    }, 2 * 1000);
-};
-
-var gracefulStop = function() {
-    tsLogger('gracefulStop: ', 'ClosedByNodeService ' + process.pid);
-    let a = gracefulStopNoMsg();
-};
-
-//Get Node server's IP so SmartThings hub can keep track of it
-function getIPAddress() {
-    var interfaces = os.networkInterfaces();
-    for (var devName in interfaces) {
-        var iface = interfaces[devName];
-        for (var i = 0; i < iface.length; i++) {
-            var alias = iface[i];
-            if (alias.family === 'IPv4' && alias.address !== '127.0.0.1' && !alias.internal)
-                return alias.address;
-        }
-    }
-    return '0.0.0.0';
-}
-
-//Get uptime
-function getServiceUptime() {
-    var now = Date.now();
-    var diff = (now - serviceStartTime) / 1000;
-    //logger.debug("diff: "+ diff);
-    return getHostUptimeStr(diff);
-}
-
-function getHostUptimeStr(time) {
-    var years = Math.floor(time / 31536000);
-    time -= years * 31536000;
-    var months = Math.floor(time / 31536000);
-    time -= months * 2592000;
-    var days = Math.floor(time / 86400);
-    time -= days * 86400;
-    var hours = Math.floor(time / 3600);
-    time -= hours * 3600;
-    var minutes = Math.floor(time / 60);
-    time -= minutes * 60;
-    var seconds = parseInt(time % 60, 10);
-    return {
-        'y': years,
-        'mn': months,
-        'd': days,
-        'h': hours,
-        'm': minutes,
-        's': seconds
-    };
-}
-
-//Handles periodic refresh tasks that run less frequently
-function periodicRefresh(){
-    tsLogger('Refreshing monitor data...');
-    mySense.getMonitorInfo()
-        .then(monitor => {
-            monitorData = monitor;
-            updateMonitorInfo();
-        })
-
-    mySense.getDevices().then(devices => {
-        for (let dev of devices) {
-            if (!deviceList[dev.id]) {
-                addDevice(dev);
-            }
-        }
-    }).then(() => {
-        let options = 
-        {
-            method: 'POST',
-            uri: 'http://' + smartThingsHubIP + ':39500/event',
-            headers: { 'source': 'STSense' },
-            body: {
-                "deviceIds": JSON.stringify(deviceIdList)
-                
-            },
-            json: true
-        }
-        request(options)
-    });
-
-    getMissedEvents();
-}
-
-
-//Attempt to refresh auth
-function refreshAuth(){
-    try {
-        mySense.getAuth();    
-    } catch (error) {
-        tsLogger(`Re-auth failed: ${error}. Exiting.`); 
-        process.exit();
-    }
-    
-}
-
-//Update the monitor device info
-function updateMonitorInfo(otherData = {}) {
-    try{  
-        let monitor = monitorData;
-        let devData = {
-            id: "SenseMonitor",
-            name: "Sense Monitor",
-            state: "on",
-            monitorData: {
-                online: (monitor.monitor_info.online === true) || false,
-                mac: monitor.monitor_info.mac || "",
-                ndt_enabled: (monitor.monitor_info.ndt_enabled === true) || false,
-                wifi_signal: monitor.monitor_info.signal || "",
-                wifi_ssid: monitor.monitor_info.ssid || "",
-                version: monitor.monitor_info.version || ""
-            }
-        };
-        if (Object.keys(otherData).length) {
-            for (const key in otherData) {
-                devData.monitorData[key] = otherData[key];
-            }
-        }
-        if (monitor.device_detection && monitor.device_detection.in_progress) {
-            devData.monitorData.detectionsPending = monitor.device_detection.in_progress || {};
-        }
-        if (deviceList["SenseMonitor"]) {
-            deviceList["SenseMonitor"] = devData;
-        } else {
-            addDevice(devData);
-        }
-        
-    } catch (error) {
-        tsLogger(error + error.stack);
-    }
-}
-
-//Main function
+//Main startup function - gets initial data and sets up recurring tasks
 async function startSense(){
     try {
         mySense = await sense({email: email, password: password, verbose: false})
@@ -364,6 +137,146 @@ async function startSense(){
     }
 }
 
+//Add a device to our local device list
+function addDevice(data) {
+    try {        
+        if (data.id === "SenseMonitor") {   //The monitor device itself is treated differently
+            deviceList[data.id] = data;
+        } else {
+            
+            //Ignore devices that are hidden on the Sense app (usually merged devices)
+            if (data.tags.DeviceListAllowed == "false"){                
+                return 0
+            }
+            
+            tsLogger("Adding New Device: (" + data.name + ") to DevicesList...");        
+            let isGuess = (data.tags && data.tags.NameUserGuess && data.tags.NameUserGuess === 'true');
+            let devData = {
+                id: data.id,
+                name: (isGuess ? data.name.trim() + ' (?)' : data.name.trim()),
+                state: "unknown",
+                usage: -1,
+                currentlyOn: false,
+                recentlyChanged: true,
+                lastOn: new Date().getTime()
+            };
+
+            if (data.id !== "SenseMonitor") {
+                devData.location = data.location || "";
+                devData.make = data.make || "";
+                devData.model = data.model || "";
+                devData.icon = data.icon || "";
+                if (data.tags) {
+                    devData.mature = (data.tags.Mature === "true") || false;
+                    devData.revoked = (data.tags.Revoked === "true") || false;
+                    devData.dateCreated = data.tags.DateCreated || "";
+                }
+            }
+            deviceList[data.id] = devData;
+            deviceIdList.push(data.id);
+        }
+    } catch (error) {
+        tsLogger(error.stack);
+    }
+    
+}
+
+//Handles periodic refresh tasks that run less frequently
+function periodicRefresh(){
+    tsLogger('Refreshing monitor data...');
+    mySense.getMonitorInfo()
+        .then(monitor => {
+            monitorData = monitor;
+            updateMonitorInfo();
+        })
+
+    mySense.getDevices().then(devices => {
+        for (let dev of devices) {
+            if (!deviceList[dev.id]) {
+                addDevice(dev);
+            }
+        }
+    }).then(() => {
+        let options = 
+        {
+            method: 'POST',
+            uri: 'http://' + smartThingsHubIP + ':39500/event',
+            headers: { 'source': 'STSense' },
+            body: {
+                "deviceIds": JSON.stringify(deviceIdList)
+                
+            },
+            json: true
+        }
+        request(options)
+    });
+
+    getMissedEvents();
+}
+
+//Checks Sense Timeline for short-lived on/off events that may have been missed
+function getMissedEvents(){
+    try {        
+        let missedToggles = [];
+        mySense.getTimeline().then(timeline => {
+            timeline.items.map(event => {                
+                if (event.type == "DeviceWasOn" && Date.parse(event.start_time) > deviceList[event.device_id].lastOn){
+                    tsLogger(`Missed toggle event detected for ${event.device_name} (${event.device_id})`);
+                    missedToggles.push(event.device_id);
+                    deviceList[event.device_id].lastOn = new Date().getTime();
+                }
+            })
+            
+            //Post missed events to SmartThings so we can toggle those on and off
+            if (missedToggles.length > 0){
+                let options = postOptions;
+                postOptions.body = {"toggleIds": missedToggles}            
+                request(options)
+            }            
+        })            
+        
+    } catch (error) {
+        tsLogger(error.stack);
+    }
+}
+
+//Update the monitor device info
+function updateMonitorInfo(otherData = {}) {
+    try{  
+        let monitor = monitorData;
+        let devData = {
+            id: "SenseMonitor",
+            name: "Sense Monitor",
+            state: "on",
+            monitorData: {
+                online: (monitor.monitor_info.online === true) || false,
+                mac: monitor.monitor_info.mac || "",
+                ndt_enabled: (monitor.monitor_info.ndt_enabled === true) || false,
+                wifi_signal: monitor.monitor_info.signal || "",
+                wifi_ssid: monitor.monitor_info.ssid || "",
+                version: monitor.monitor_info.version || ""
+            }
+        };
+        if (Object.keys(otherData).length) {
+            for (const key in otherData) {
+                devData.monitorData[key] = otherData[key];
+            }
+        }
+        if (monitor.device_detection && monitor.device_detection.in_progress) {
+            devData.monitorData.detectionsPending = monitor.device_detection.in_progress || {};
+        }
+        if (deviceList["SenseMonitor"]) {
+            deviceList["SenseMonitor"] = devData;
+        } else {
+            addDevice(devData);
+        }
+        
+    } catch (error) {
+        tsLogger(error + error.stack);
+    }
+}
+
+//Main websocket data processing
 function processData(data) {
     try {        
         if (data.payload && data.payload.devices) {
@@ -529,6 +442,16 @@ function processData(data) {
     
 }
 
+//Attempt to refresh auth
+function refreshAuth(){
+    try {
+        mySense.getAuth();    
+    } catch (error) {
+        tsLogger(`Re-auth failed: ${error}. Exiting.`); 
+        process.exit();
+    }    
+}
+
 //Format usage
 function convUsage(val, rndTo = 2) {
     if (val !== -1) {
@@ -536,6 +459,86 @@ function convUsage(val, rndTo = 2) {
     }
     return val;
 }
+
+//Logging with timestamp
+function tsLogger(msg) {
+    let dt = new Date().toLocaleString();
+    console.log(dt + ' | ' + msg);
+}
+
+
+//Handle process closing
+function exitHandler(options, err) {
+    console.log('exitHandler: (PID: ' + process.pid + ')', options, err);
+    if (options.cleanup) {
+        tsLogger('exitHandler: ', 'ClosedByUserConsole');
+    } else if (err) {
+        tsLogger('exitHandler error', err);
+        if (options.exit) process.exit(1);
+    }
+    process.exit();
+}
+
+//Handle graceful shutdown
+var gracefulStopNoMsg = function() {
+    tsLogger('gracefulStopNoMsg: ', process.pid);
+    console.log('graceful setting timeout for PID: ' + process.pid);
+    setTimeout(function() {
+        console.error("Could not close connections in time, forcefully shutting down");
+        process.exit(1);
+    }, 2 * 1000);
+};
+
+var gracefulStop = function() {
+    tsLogger('gracefulStop: ', 'ClosedByNodeService ' + process.pid);
+    let a = gracefulStopNoMsg();
+};
+
+
+//Get uptime
+function getServiceUptime() {
+    var now = Date.now();
+    var diff = (now - serviceStartTime) / 1000;
+    //logger.debug("diff: "+ diff);
+    return getHostUptimeStr(diff);
+}
+
+function getHostUptimeStr(time) {
+    var years = Math.floor(time / 31536000);
+    time -= years * 31536000;
+    var months = Math.floor(time / 31536000);
+    time -= months * 2592000;
+    var days = Math.floor(time / 86400);
+    time -= days * 86400;
+    var hours = Math.floor(time / 3600);
+    time -= hours * 3600;
+    var minutes = Math.floor(time / 60);
+    time -= minutes * 60;
+    var seconds = parseInt(time % 60, 10);
+    return {
+        'y': years,
+        'mn': months,
+        'd': days,
+        'h': hours,
+        'm': minutes,
+        's': seconds
+    };
+}
+
+//Get Node server's IP so SmartThings hub can keep track of it
+function getIPAddress() {
+    var interfaces = os.networkInterfaces();
+    for (var devName in interfaces) {
+        var iface = interfaces[devName];
+        for (var i = 0; i < iface.length; i++) {
+            var alias = iface[i];
+            if (alias.family === 'IPv4' && alias.address !== '127.0.0.1' && !alias.internal)
+                return alias.address;
+        }
+    }
+    return '0.0.0.0';
+}
+
 
 function startWebServer() {
     app.set('port', callbackPort);
