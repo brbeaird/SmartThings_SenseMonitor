@@ -125,7 +125,7 @@ module.exports =
                     },
 
                     closeStream: () => {
-                        senseWS.terminate();
+                        senseWS.close();
                     },
 
                     getAuth: async () => {
