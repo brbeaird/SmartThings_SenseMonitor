@@ -383,7 +383,8 @@ def lanEventHandler(evt) {
 		List ignoreTheseDevs = settings?.senseDeviceFilter ?: []
 		if (result?.devices) {
 			Map senseDeviceMap = [:]
-            senseDeviceMap = state.senseDeviceMap
+            if (state.senseDeviceMap){senseDeviceMap = state.senseDeviceMap}             
+            //Map senseDeviceMap = state.senseDeviceMap
 			log.debug "Updating (${result?.devices?.size()}) Sense Devices..."
 			result?.devices?.each { senseDevice ->
 				Boolean isMonitor = (senseDevice?.id == "SenseMonitor")
