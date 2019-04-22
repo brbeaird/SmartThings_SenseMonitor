@@ -205,6 +205,9 @@ function refreshDeviceList(){
             if (!deviceList[dev.id]) {
                 addDevice(dev);
             }
+            else{
+                deviceList[dev.id]= dev;
+            }
         }
     }).then(() => {
         if (deviceIdList.length > 0){
