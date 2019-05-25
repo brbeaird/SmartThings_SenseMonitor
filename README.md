@@ -44,7 +44,7 @@ There are 2 code files needed: 1 SmartApp and 1 Device Handler.
 3. Click on **My Device Handlers** -> **Create new Device Handler** -> **From Code**.
 4. Copy contents of <a href="https://raw.githubusercontent.com/brbeaird/SmartThings_SenseMonitor/master/devicetypes/brbeaird/sense-monitor-device.src/sense-monitor-device.groovy">Sense Device </a> and paste into text area. Click **Create**. Click **Publish** > **For Me**
 5. Now we create the SmartApp code. Click **My SmartApps** -> **New Smartapp** -> **From Code**.
-6. Copy contents of <a href="https://raw.githubusercontent.com/brbeaird/SmartThings_SenseMonitor/master/smartapps/brbeaird/sensemonitor.src/sensemonitor.groovy">SmartApp</a> and paste into text area. Click **Create**. Click **Publish** > **For Me**
+6. Copy contents of <a href="https://raw.githubusercontent.com/brbeaird/SmartThings_SenseMonitor/master/smartapps/brbeaird/sense-monitor-app.src/sense-monitor-app.groovy">SmartApp</a> and paste into text area. Click **Create**. Click **Publish** > **For Me**
 7. In your SmartThings mobile app, tap **Automation** -> **SmartApps** -> **Add a SmartApp**. Scroll down and tap **My Apps**. Tap **Sense**. Tap save to complete the installation. Your SmartApp is now listening for Sense data. Move on to the node server setup! 
 
 ### SmartThings IDE GitHub Integration:
