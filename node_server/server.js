@@ -105,7 +105,7 @@ async function startSense(){
 
         //Handle closures and errors
         mySense.events.on('close', (data) => {
-            tsLogger(`Sense WebSocket Closed | Reason: ${data.wasClean ? 'Normal' : data.reason}`);            
+            tsLogger(`Sense WebSocket Closed | Reason: ${data.wasClean ? 'Normal' : data.reason}`);
             let interval = websocketPollingInterval && websocketPollingInterval > 10 ? websocketPollingInterval : 60;
             setTimeout(() => {
                 mySense.openStream();
@@ -300,6 +300,11 @@ function processData(data) {
 
                 if (!deviceList[dev.id]) { //If Device is NEW make a new spot for it in the deviceMap
                     addDevice(dev);
+                }
+
+                //If device still failed to add for some reason, bail out of this entry
+                if (!deviceList[dev.id]){
+                    continue;
                 }
 
                 let prevState = deviceList[dev.id].state;
@@ -557,7 +562,7 @@ function startWebServer() {
             tsLogger('** Settings Update Received from SmartThings **');
             if (req.headers.websocketpollinginterval !== undefined && parseInt(req.headers.websocketpollinginterval) !== websocketPollingInterval) {
                 tsLogger('++ Changed Setting (websocketPollingInterval) | New Value: (' + req.headers.websocketpollinginterval + ') | Old Value: (' + websocketPollingInterval + ') ++');
-                websocketPollingInterval = parseInt(req.headers.websocketpollinginterval);                
+                websocketPollingInterval = parseInt(req.headers.websocketpollinginterval);
             }
             if (req.headers.refreshinterval !== undefined && parseInt(req.headers.refreshinterval) !== refreshInterval) {
                 tsLogger('++ Changed Setting (refreshInterval) | New Value: (' + req.headers.refreshinterval + ') | Old Value: (' + refreshInterval + ') ++');
