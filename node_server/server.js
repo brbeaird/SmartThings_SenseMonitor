@@ -4,7 +4,7 @@
 const serverVersion = "0.4.0";
 //Libraries
 const http = require('http');
-const sense = require('./unofficial-sense'); //Temporarily using our own version until pull requests are merged in
+const sense = require('sense-energy-node');
 const request = require("request-promise");
 const express = require('express');
 const os = require('os');
