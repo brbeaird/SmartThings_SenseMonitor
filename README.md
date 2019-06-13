@@ -63,6 +63,6 @@ In the future, should you wish to update, simply repeat steps 2 and 3. The only 
  2. Download (or git clone) the  files <a href="https://github.com/brbeaird/SmartThings_SenseMonitor">in this repository</a>. If you're new to git, you can click the green Download button and grab a zip file of everything. Extract the zip file.
  3. Open a command prompt and navigate to the location where you downloaded the files in step 2. Navigate down to SmartThings_SenseMonitor\node_server. 
  4. Run `npm install` (this grabs needed libraries)
- 5. Open the server.js file in a text editor and put in your Sense login information and SmartThings hub IP under the required settings section. You can find your hub IP in the SmartThings IDE by clicking the Hub link, then clicking your hub, then scrolling down to IP Address. Be sure to save your changes.
+ 5. Open the config.js file in a text editor and put in your Sense login information and SmartThings hub IP under the required settings section. You can find your hub IP in the SmartThings IDE by clicking the Hub link, then clicking your hub, then scrolling down to IP Address. Be sure to save your changes.
  6. Run `node server.js`. This starts up the data connection. If all goes well, you should see a successful connection message. Leave this window running to continue collecting data and sending it to SmartThings.
  7. I strongly recommend using something like PM2 to keep the node server running in the background. Will add more detailed steps on that later.
