@@ -1,6 +1,6 @@
 {
     "name": "smartthings_sensemonitor",
-    "version": "1.0.0",
+    "version": "0.4.2",
     "description": "Integrates Sense Energy Monitor with SmartThings",
     "main": "server.js",
     "scripts": {

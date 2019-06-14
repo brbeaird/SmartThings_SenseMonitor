@@ -1,7 +1,7 @@
 //Required settings
 'use strict';
 
-const serverVersion = "0.4.0";
+const serverVersion = "0.4.2";
 //Libraries
 const http = require('http');
 const sense = require('sense-energy-node');
@@ -144,7 +144,7 @@ function scheduleMonitorRefresh(){
 //Add a device to our local device list
 function addDevice(data) {
     try {
-        if (data.id === "SenseMonitor") {   //The monitor device itself is treated differently
+        if (data.id === "SenseMonitor" || data.id === 'solar') {   //The monitor device itself is treated differently
             deviceList[data.id] = data;
         } else {
 
