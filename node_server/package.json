@@ -10,7 +10,7 @@
     "author": "",
     "license": "ISC",
     "dependencies": {
-        "@brbeaird/sense-energy-node": "^1.0.4",
+        "sense-energy-node": "^1.0.4",
         "express": "^4.17.1",
         "moment": "^2.24.0",
         "node-datetime": "^2.1.2",
