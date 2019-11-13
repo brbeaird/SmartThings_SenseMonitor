@@ -20,16 +20,17 @@
  */
 
 import java.text.SimpleDateFormat
-String devVersion() { return "0.3.3"}
-String devModified() { return "2019-04-04"}
+String devVersion() { return "1.0.0"}
+String devModified() { return "2019-11-12"}
 String gitAuthor() { return "brbeaird" }
 String getAppImg(imgName) { return "https://raw.githubusercontent.com/${gitAuthor()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
 
 metadata {
     definition (name: "Sense Monitor Device", namespace: "brbeaird", author: "Anthony Santilli & Brian Beaird", vid: "generic-power") {
         capability "Power Meter"
+        capability "Energy Meter"
         capability "Sensor"
-        
+
         attribute "lastUpdated", "string"
         attribute "firmwareVer", "string"
         attribute "phase1Voltage", "string"
@@ -71,6 +72,10 @@ metadata {
                     [value: 1, color: "#00a0dc"]
                 ]
         }
+        valueTile("dailyUsage", "device.energy", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("energy", label:'Todays Usage: ${currentValue} kwH')
+        }
+
         valueTile("blank1x1", "device.blank", height: 1, width: 1, inactiveLabel: false, decoration: "flat") {
             state("blank1x1", label:'')
         }
@@ -99,7 +104,7 @@ metadata {
             state("wifi_ssid", label:'WiFi SSID:\n${currentValue}')
         }
         valueTile("wifi_signal", "device.wifi_signal", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
-            state("wifi_signal", label:'WiFi Signal:\n${currentValue}', unit: "dBm")
+            state("wifi_signal", label:'WiFi Signal:\n${currentValue}%', unit: "dBm")
         }
         valueTile("networkDetection", "device.networkDetection", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
             state("networkDetection", label:'Network Detection:\n${currentValue}')
@@ -108,7 +113,7 @@ metadata {
             state("detectionsPending", label:'Pending Device Detections:\n${currentValue}')
         }
         main(["power"])
-        details(["genericMulti", "dtCreated", "phase1Voltage", "phase2Voltage", "phase1Usage", "phase2Usage", "cycleHz", "wifi_ssid", "wifi_signal", "networkDetection", "detectionsPending", "firmwareVer"])
+        details(["genericMulti", "dtCreated", "dailyUsage", "phase1Voltage", "phase2Voltage", "phase1Usage", "phase2Usage", "cycleHz", "wifi_ssid", "wifi_signal", "networkDetection", "detectionsPending", "firmwareVer"])
     }
 }
 
@@ -133,6 +138,8 @@ def getShortDevName(){
 }
 
 def updateDeviceStatus(Map senseDevice){
+    sendEvent(name: "energy", value: senseDevice?.dailyUsage)
+
     String devName = getShortDevName()
     senseDevice?.monitorData?.each { k,v ->
         logger("debug", "$k: $v")
@@ -151,7 +158,7 @@ def updateDeviceStatus(Map senseDevice){
         }
     }
     // log.debug "usage: ${senseDevice?.usage} | currentPower: $currentPower | oldPower: ${oldPower}"
-    
+
     if(senseDevice?.monitorData) {
         String firmwareVer = senseDevice?.monitorData?.version ?: "Not Set"
         if(isStateChange(device, "firmwareVer", firmwareVer?.toString())) {
@@ -188,13 +195,14 @@ def updateDeviceStatus(Map senseDevice){
         }
         String signal = senseDevice?.monitorData?.wifi_signal ?: "Not Set"
         if(isStateChange(device, "wifi_signal", signal?.toString())) {
-        	Float currentSignal = senseDevice?.monitorData?.wifi_signal?.split()[0].isNumber() ? senseDevice?.monitorData?.wifi_signal.split()[0] as Float : 0.0
+        	Float currentSignal = senseDevice?.monitorData?.wifi_signal.isNumber() ? senseDevice?.monitorData?.wifi_signal as Float : 0.0
             Float oldSignal = -1
             if (device.currentState("wifi_signal")){
-            	oldSignal = device.currentState("wifi_signal")?.stringValue?.split()[0] as Float ?: -1.0
+            if (device.currentState("wifi_signal") && device.currentState("wifi_signal").stringValue.isNumber()){
+                oldSignal = device.currentState("wifi_signal").stringValue as Float
             }
 
-            log.debug "oldSignal " + oldSignal
+            //log.debug "oldSignal " + oldSignal
             def showSignalLog = false
             def signalChange = (currentSignal - oldSignal).abs()
             if (signalChange > 5)

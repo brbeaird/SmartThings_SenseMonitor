@@ -18,8 +18,8 @@
 import java.text.SimpleDateFormat
 include 'asynchttp_v1'
 
-String appVersion() { return "0.3.4" }
-String appModified() { return "2019-04-04"}
+String appVersion() { return "1.0.0" }
+String appModified() { return "2019-11-12"}
 String appAuthor() { return "Anthony Santilli & Brian Beaird" }
 String gitBranch() { return "brbeaird" }
 String getAppImg(imgName) 	{ return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
@@ -383,9 +383,9 @@ def lanEventHandler(evt) {
 		List ignoreTheseDevs = settings?.senseDeviceFilter ?: []
 		if (result?.devices) {
 			Map senseDeviceMap = [:]
-            if (state.senseDeviceMap){senseDeviceMap = state.senseDeviceMap}             
+            if (state.senseDeviceMap){senseDeviceMap = state.senseDeviceMap}
             //Map senseDeviceMap = state.senseDeviceMap
-			log.debug "Updating (${result?.devices?.size()}) Sense Devices..."
+			//log.debug "Updating (${result?.devices?.size()}) Sense Devices..."
 			result?.devices?.each { senseDevice ->
 				Boolean isMonitor = (senseDevice?.id == "SenseMonitor")
 				senseDeviceMap[senseDevice?.id] = senseDevice
@@ -421,7 +421,7 @@ def lanEventHandler(evt) {
 					} else {
 						//Check and see if name needs a refresh
 						if (settings?.autoRenameDevices != false && (childDevice?.name != childHandlerName || childDevice?.label != fullName)) {
-                            log.debug ("Updating device name (old label was " + childDevice?.label + " | old name was " + childDevice?.name + " new name: " + fullName)
+                            //log.debug ("Updating device name (old label was " + childDevice?.label + " | old name was " + childDevice?.name + " new name: " + fullName)
 							childDevice?.name = childHandlerName
 							childDevice?.label = fullName
 						}
@@ -733,49 +733,50 @@ def versionCheck(){
 	log.warn "${state.versionWarning}"
 }
 
-private getVersionInfo(oldVersion, newVersion){
-	def params = [
-		uri:  'http://www.fantasyaftermath.com/getVersion/sense/' +  oldVersion + '/' + newVersion,
-		contentType: 'application/json'
-	]
-	asynchttp_v1.get('responseHandlerMethod', params)
-}
-
-private responseHandlerMethod(response, data) {
-	if (response.hasError()) {
-		log.error "response has error: $response.errorMessage"
-	} else {
-		def results = response.json
-		state.latestSmartAppVersion = results.SmartApp;
-		state.latestDeviceVersion = results.DoorDevice;
-	}
-
-	logger("debug", "previousVersion: " + state?.previousVersion)
-	logger("debug", "installedVersion: " + state?.thisSmartAppVersion)
-	logger("debug", "latestVersion: " + state?.latestSmartAppVersion)
-	logger("debug", "deviceVersion: " + state?.latestDeviceVersion)
-}
-
 private checkVersionData(now = false) { //This reads a JSON file from GitHub with version numbers
-	if (now || !state?.versionData || (getLastVerUpdSec() > (3600*6))) {
+	if (now || !state?.versionData || (getLastVerUpdSec() > (3600*3))) {
 		if(now && (getLastVerUpdSec() < 300)) { return }
 		getVersionData()
 	}
 }
 
 private getVersionData() {
-	def params = [
-		uri:  "https://raw.githubusercontent.com/tonesto7/SmartThings_SenseMonitor/master/resources/versions.json",
-		contentType: 'application/json'
-	]
+    def params = [
+        uri:  'http://www.brbeaird.com/getVersion',
+        headers: ["Content-Type": "application/json"],
+        body: new groovy.json.JsonBuilder([
+        	app: "sense",
+            platform: "ST",
+            prevVersion: "versionCheck",
+            currentVersion: appVersion()
+        ]).toString()
+    ]
 	try {
-		httpGet(params) { resp->
-			if(resp?.data) {
-				log.info "Getting Latest Version Data from versions.json File"
-				state?.versionData = resp?.data
+		httpPost(params) { resp->
+            if(resp?.data)
+            {
+
+				def mappedVersion =
+                [
+                    "versions": [
+                        "mainApp": [
+                            "ver": resp.data.SmartApp
+                        ],
+                        "monitorDevice": [
+                            "ver": resp.data.DoorDevice
+                        ],
+                        "energyDevice": [
+                            "ver": resp.data.DoorDeviceNoSensor
+                        ],
+                        "server": [
+                            "ver": resp.data.LightDevice
+                        ]
+                    ]
+            	]
+				state?.versionData = mappedVersion
 				state?.lastVerUpdDt = getDtNow()
-			}
-		}
+            }
+        }
 	} catch(ex) {
 		log.error "getVersionData Exception: ", ex
 	}

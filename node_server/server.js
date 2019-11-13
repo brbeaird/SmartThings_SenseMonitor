@@ -4,12 +4,13 @@
 const serverVersion = "0.4.2";
 //Libraries
 const http = require('http');
-const sense = require('sense-energy-node');
+const sense = require('@brbeaird/sense-energy-node');
 const request = require("request-promise");
 const express = require('express');
 const os = require('os');
 const app = express();
 const appServer = http.createServer(app);
+const moment = require('moment');
 
 //Required Setting (Set in Config.js)
 const config = require('./config');
@@ -47,6 +48,7 @@ var mySense;                        //Main Sense API object
 var currentlyProcessing = false;    //Flag to ensure only one websocket packet is handled at a time
 var deviceList = {};                //Holds list of Sense devices
 var monitorData = {};               //Holds monitor device data
+var dailyUsageData = {};
 var deviceIdList = [];              //Holds list of Sense devices (just the IDs) - used to look for stale devices in ST
 var serviceStartTime = Date.now();  //Returns time in millis
 var eventCount = 0;                 //Keeps a tally of how many times data was sent to ST in the running sessions
@@ -65,11 +67,17 @@ async function startSense(){
     try {
         mySense = await sense({email: email, password: password, verbose: false})   //Set up Sense API object and authenticate
 
+        //Get daily usage data
+        let today = new Date();
+        let todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
+        dailyUsageData = await mySense.getDailyUsage(moment.utc(todayMidnight).format());
+
         //Get devices
         await mySense.getDevices().then(devices => {
             for (let dev of devices) {
                 addDevice(dev);
             }
+            updateDailyUsage();
         });
 
         //Get monitor info
@@ -112,7 +120,7 @@ async function startSense(){
             },  interval * 1000);
         });
         mySense.events.on('error', (data) => {
-            tsLogger('Error: Sense WebSocket Closed | Reason: ' + data.msg);
+            tsLogger('Error: Sense WebSocket Closed: ' + data.message);
         });
 
         //Open websocket flow (and re-open again on an interval)
@@ -123,7 +131,7 @@ async function startSense(){
         scheduleMonitorRefresh();
 
     } catch (error) {
-        tsLogger(`FATAL ERROR: ${error}`);
+        tsLogger(`FATAL ERROR: ${error.message}`);
         if (error.stack){
             tsLogger(`FATAL ERROR: ${error.stack}`);
         }
@@ -139,6 +147,12 @@ function scheduleMonitorRefresh(){
             periodicRefresh();
         }, interval * 1000);
     }, 30000);
+}
+
+function updateDeviceDailyUsage(dev){
+    if (deviceList[dev.id]){
+        deviceList[dev.id].dailyUsage = dev.dailyUsage;
+    }
 }
 
 //Add a device to our local device list
@@ -186,16 +200,27 @@ function addDevice(data) {
 }
 
 //Handles periodic refresh tasks that run less frequently
-function periodicRefresh(){
-    tsLogger('Refreshing monitor data, monitor data, and missed events...');
-    mySense.getMonitorInfo()
-        .then(monitor => {
-            monitorData = monitor;
-            updateMonitorInfo();
-        })
+async function periodicRefresh(){
+    try {
+        tsLogger('Refreshing monitor data, monitor data, and missed events...');
 
-    refreshDeviceList();
-    getMissedEvents();
+        //Get daily usage data
+        let today = new Date();
+        let todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
+        dailyUsageData = await mySense.getDailyUsage(moment.utc(todayMidnight).format());
+
+        //Get monitor stats
+        mySense.getMonitorInfo()
+            .then(monitor => {
+                monitorData = monitor;
+                updateMonitorInfo();
+                refreshDeviceList();
+            })
+
+        getMissedEvents();
+    } catch (error) {
+        log.error(`Error in periodicRefresh: ${error.message}`)
+    }
 }
 
 //Refresh device list from Sense and send a list of the ID's to ST to check for stale devices
@@ -209,13 +234,21 @@ function refreshDeviceList(){
                 deviceList[dev.id]= dev;
             }
         }
-    }).then(() => {
+    }).then(async () => {
         if (deviceIdList.length > 0){
+            updateDailyUsage();
             let options = postOptions;
             options.body = {"deviceIds": JSON.stringify(deviceIdList)}
             request(options);
         }
     });
+}
+
+//Get daily usage
+function updateDailyUsage(){
+    for (let usageDevice of dailyUsageData.consumption.devices){
+        updateDeviceDailyUsage({id: usageDevice.id, dailyUsage: (usageDevice.pct/100) * dailyUsageData.consumption.total});
+    }
 }
 
 //Checks Sense Timeline for short-lived on/off events that may have been missed; send any missed events to ST
@@ -252,11 +285,12 @@ function updateMonitorInfo(otherData = {}) {
             id: "SenseMonitor",
             name: "Sense Monitor",
             state: "on",
+            dailyUsage: dailyUsageData.consumption.total,
             monitorData: {
                 online: (monitor.monitor_info.online === true) || false,
                 mac: monitor.monitor_info.mac || "",
                 ndt_enabled: (monitor.monitor_info.ndt_enabled === true) || false,
-                wifi_signal: monitor.monitor_info.signal || "",
+                wifi_signal: monitor.monitor_info.wifi_strength || "",
                 wifi_ssid: monitor.monitor_info.ssid || "",
                 version: monitor.monitor_info.version || ""
             }

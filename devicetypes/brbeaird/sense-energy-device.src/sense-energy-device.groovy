@@ -20,18 +20,19 @@
  */
 
 import java.text.SimpleDateFormat
-String devVersion() { return "0.3.3"}
-String devModified() { return "2019-04-04"}
+String devVersion() { return "1.0.0"}
+String devModified() { return "2019-11-12"}
 String gitAuthor() { return "brbeaird" }
 String getAppImg(imgName) { return "https://raw.githubusercontent.com/${gitAuthor()}/SmartThings_SenseMonitor/master/resources/icons/$imgName" }
 
 metadata {
     definition (name: "Sense Energy Device", namespace: "brbeaird", author: "Anthony Santilli & Brian Beaird", vid: "generic-power") {
         capability "Power Meter"
+        capability "Energy Meter"
         capability "Switch"
         capability "Actuator"
         capability "Sensor"
-        
+
         attribute "lastUpdated", "string"
         attribute "deviceLocation", "string"
         attribute "dtCreated", "string"
@@ -74,6 +75,9 @@ metadata {
         valueTile("power", "device.power", decoration: "flat", width: 1, height: 1) {
             state "power", label:'${currentValue} W', backgroundColors:[[value: 0, color: "#ffffff"],[value: 1, color: "#00a0dc"]], icon: "https://raw.githubusercontent.com/tonesto7/SmartThings_SenseMonitor/master/resources/icons/sense_energy.png"
         }
+        valueTile("dailyUsage", "device.energy", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("energy", label:'Today\'s Usage: ${currentValue} kwH')
+        }
         valueTile("blank1", "device.blank", height: 1, width: 1, inactiveLabel: false, decoration: "flat") {
             state("default", label:'')
         }
@@ -108,7 +112,7 @@ metadata {
             state("deviceRevoked", label:'Device Valid:\n${currentValue}')
         }
         main(["power"])
-        details(["genericMulti", "lastUpdated", "dtCreated", "deviceLocation", "deviceMake", "deviceModel", "detectionMature", "deviceRevoked", "onCountToday", "onCountWeek"])
+        details(["genericMulti", "lastUpdated", "dtCreated", "dailyUsage", "deviceLocation", "deviceMake", "deviceModel", "detectionMature", "deviceRevoked", "onCountToday", "onCountWeek"])
     }
 }
 
@@ -232,6 +236,8 @@ def getShortDevName(){
 }
 
 def updateDeviceStatus(Map senseDevice){
+    sendEvent(name: "energy", value: senseDevice?.dailyUsage)
+
     String devName = getShortDevName()
     String oldStatus = device.currentValue("switch")
     //log.debug "Old status was " + oldStatus
@@ -293,7 +299,7 @@ def updateDeviceStatus(Map senseDevice){
     // }
 
     // log.debug "usage: ${senseDevice?.usage} | currentPower: $currentPower | oldPower: ${oldPower}"
-    
+
     if(senseDevice?.containsKey("dateCreated")) {
         def dtCreated = senseDevice?.dateCreated ? formatDt(parseDt(senseDevice?.dateCreated, "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")) : (state?.dateCreated ? formatDt(parseDt(state?.dateCreated, "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")) : "")
         if(isStateChange(device, "dtCreated", dtCreated as String)) {
@@ -325,7 +331,7 @@ def updateDeviceStatus(Map senseDevice){
             sendEvent(name: "detectionMature", value: (senseDevice?.mature == true)?.toString()?.capitalize(), display: true, displayed: true)
         }
     }
-    
+
     // log.debug "currentPower: ${currentPower} | oldPower: ${oldPower}"
     if (oldPower != currentPower) {
         if (isStateChange(device, "power", currentPower?.toString())) {

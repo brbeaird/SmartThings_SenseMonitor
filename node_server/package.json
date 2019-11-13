@@ -10,12 +10,13 @@
     "author": "",
     "license": "ISC",
     "dependencies": {
-        "express": "^4.16.4",
+        "@brbeaird/sense-energy-node": "^1.0.4",
+        "express": "^4.17.1",
+        "moment": "^2.24.0",
         "node-datetime": "^2.1.2",
-        "node-fetch": "^2.3.0",
+        "node-fetch": "^2.6.0",
         "request": "^2.88.0",
         "request-promise": "^4.2.4",
-        "sense-energy-node": "^1.0.2",
         "ws": "^6.2.1"
     }
 }
