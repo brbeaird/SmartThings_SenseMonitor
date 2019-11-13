@@ -4,7 +4,7 @@
 const serverVersion = "0.4.2";
 //Libraries
 const http = require('http');
-const sense = require('@brbeaird/sense-energy-node');
+const sense = require('sense-energy-node');
 const request = require("request-promise");
 const express = require('express');
 const os = require('os');
