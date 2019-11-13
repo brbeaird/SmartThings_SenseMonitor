@@ -209,6 +209,7 @@ def updateDeviceStatus(Map senseDevice){
                 showSignalLog = true
                 sendEvent(name: "wifi_signal", value: signal?.toString(), display: showSignalLog, displayed: showSignalLog)
             }
+        }
 
         String netDetect = (senseDevice?.monitorData?.ndt_enabled == true) ? "Enabled" : "Disabled"
         if(isStateChange(device, "networkDetection", netDetect?.toString())) {
