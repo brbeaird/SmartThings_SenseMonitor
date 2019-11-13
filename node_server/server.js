@@ -1,7 +1,7 @@
 //Required settings
 'use strict';
 
-const serverVersion = "0.4.2";
+const serverVersion = "1.0.0";
 //Libraries
 const http = require('http');
 const sense = require('sense-energy-node');

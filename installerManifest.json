@@ -1,0 +1,50 @@
+{
+    "namespace": "brbeaird",
+    "repoOwner": "brbeaird",
+    "repoName": "SmartThings_SenseMonitor",
+    "repoBranch": "master",
+    "name": "Sense Monitor",
+    "author": "Brian Beaird",
+    "description": "SmartThings integration with the Sense Energy Monitor",
+    "category": "My Apps",
+    "bannerUrl": "https://raw.githubusercontent.com/brbeaird/SmartThings_SenseMonitor/master/resources/icons/SenseBanner.png",
+    "forumUrl": "https://community.smartthings.com/t/release-sense-energy-monitor",
+    "docUrl": "https://github.com/brbeaird/SmartThings_SenseMonitor/blob/master/README.md",
+    "releaseType": "production",
+    "keywords": ["Sense", "Energy", "Sense Energy Monitor", "Power"],
+    "notes": "Nothing to show here (yet)",
+    "smartApps": {
+        "parent": {
+            "name": "Sense",
+            "iconUrl": "https://raw.githubusercontent.com/brbeaird/SmartThings_SenseMonitor/master/resources/icons/sense.1x.png",
+            "published": true,
+            "oAuth": true,
+            "version": "1.0.0",
+            "appSettings": {},
+            "appUrl": "smartapps/brbeaird/sense-monitor-app.src/sense-monitor-app.groovy"
+        },
+        "children": []
+    },
+    "deviceHandlers": [
+        {
+            "name": "Energy Device",
+            "iconUrl": "https://raw.githubusercontent.com/brbeaird/SmartThings_SenseMonitor/master/resources/icons/sense.1x.png",
+            "published": true,
+            "oAuth": false,
+            "appUrl": "devicetypes/brbeaird/sense-energy-device.src/sense-energy-device.groovy",
+            "appSettings": {},
+            "version": "1.0.0",
+            "optional": false
+        },
+        {
+            "name": "Monitor Device",
+            "iconUrl": "https://raw.githubusercontent.com/brbeaird/SmartThings_SenseMonitor/master/resources/icons/sense.1x.png",
+            "published": true,
+            "oAuth": false,
+            "appUrl": "devicetypes/brbeaird/sense-energy-monitor.src/sense-energy-monitor.groovy",
+            "appSettings": {},
+            "version": "1.0.0",
+            "optional": false
+        }
+        ]
+}
