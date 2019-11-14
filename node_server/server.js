@@ -1,7 +1,7 @@
 //Required settings
 'use strict';
 
-const serverVersion = "1.0.0";
+const serverVersion = "1.0.1";
 //Libraries
 const http = require('http');
 const sense = require('sense-energy-node');
@@ -244,10 +244,17 @@ function refreshDeviceList(){
     });
 }
 
-//Get daily usage
+//Get daily usage and production
 function updateDailyUsage(){
-    for (let usageDevice of dailyUsageData.consumption.devices){
-        updateDeviceDailyUsage({id: usageDevice.id, dailyUsage: (usageDevice.pct/100) * dailyUsageData.consumption.total});
+    if (dailyUsageData.consumption.devices){
+        for (let usageDevice of dailyUsageData.consumption.devices){
+            updateDeviceDailyUsage({id: usageDevice.id, dailyUsage: (usageDevice.pct/100) * dailyUsageData.consumption.total});
+        }
+    }
+    if (dailyUsageData.production.devices){
+        for (let usageDevice of dailyUsageData.production.devices){
+            updateDeviceDailyUsage({id: usageDevice.id, dailyUsage: (usageDevice.pct/100) * dailyUsageData.production.total});
+        }
     }
 }
 
