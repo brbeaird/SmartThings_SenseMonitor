@@ -225,12 +225,14 @@ async function periodicRefresh(){
 
 //Refresh device list from Sense and send a list of the ID's to ST to check for stale devices
 function refreshDeviceList(){
+    deviceIdList = [];
     mySense.getDevices().then(devices => {
         for (let dev of devices) {
             if (!deviceList[dev.id]) {
                 addDevice(dev);
             }
             else{
+                deviceIdList.push(dev.id);
                 deviceList[dev.id]= dev;
             }
         }
