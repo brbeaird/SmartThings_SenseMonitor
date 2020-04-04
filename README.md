@@ -1,3 +1,6 @@
+## NOTE ON DEBIAN 10
+There is a known issue with Debian 10 (esp. on Raspberry Pi) where the SSL connection to the Sense server will fail. Until this is resolved, I suggest using Debian 9 or something else.
+
 # SmartThings_SenseMonitor
 Connects SmartThings with Sense
 
