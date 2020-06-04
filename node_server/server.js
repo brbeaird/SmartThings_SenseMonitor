@@ -309,9 +309,14 @@ function updateMonitorInfo(otherData = {}) {
                 devData.monitorData[key] = otherData[key];
             }
         }
-        if (monitor.device_detection && monitor.device_detection.in_progress) {
-            devData.monitorData.detectionsPending = monitor.device_detection.in_progress || {};
+
+        //Add in device detection list
+        if (monitor.device_detection){
+            let inProgressDetections = monitor.device_detection.in_progress || [];
+            let foundDetections = monitor.device_detection.found || [];
+            devData.monitorData.detectionsPending = foundDetections.concat(inProgressDetections);
         }
+
         if (deviceList["SenseMonitor"]) {
             deviceList["SenseMonitor"] = devData;
         } else {
