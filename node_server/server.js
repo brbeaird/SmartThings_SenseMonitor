@@ -228,6 +228,7 @@ function refreshDeviceList(){
     deviceIdList = [];
     mySense.getDevices().then(devices => {
         for (let dev of devices) {
+            dev.lastSeen = new Date().getTime();
             if (!deviceList[dev.id]) {
                 addDevice(dev);
             }
@@ -236,6 +237,16 @@ function refreshDeviceList(){
                 deviceList[dev.id]= dev;
             }
         }
+
+        //Now remove stale devices from our local list
+        for (let i = 0; i < Object.keys(deviceList).length; i++){
+            let devKey = deviceList[Object.keys(deviceList)[i]]
+            if (new Date().getTime() - devKey.lastSeen > 1000*60*(refreshInterval*2)){
+                delete deviceList[devKey.id];
+                tsLogger(`${devKey.name} detected as deleted. Removing.`);
+            }
+        }
+
     }).then(async () => {
         if (deviceIdList.length > 0){
             updateDailyUsage();
