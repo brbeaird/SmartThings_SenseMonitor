@@ -18,6 +18,6 @@
         "request": "^2.88.2",
         "request-promise": "^4.2.6",
         "sense-energy-node": "^1.0.6",
-        "ws": "^6.2.1"
+        "ws": "^6.2.2"
     }
 }
