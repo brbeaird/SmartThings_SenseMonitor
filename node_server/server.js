@@ -483,6 +483,7 @@ function processData(data) {
 
             //****Send to SmartThings!****
             //Send first group that also contains config info
+            tsLogger('** Sending (' + devArray.length + ') Devices to SmartThings! **');
             request(options)
             .then(function() {
                 eventCount++;
@@ -498,9 +499,12 @@ function processData(data) {
                 currentlyProcessing = false;
             })
             .catch(function(err) {
-                console.log("ERROR: Unable to connect to SmartThings Hub: " + err.message);
+                tsLogger("ERROR: Unable to connect to SmartThings Hub: " + err.message);                
                 currentlyProcessing = false;
             });
+        }
+        else{
+            tsLogger("Payload empty!");
         }
     } catch (error) {
         tsLogger(error + ' ' + error.stack);
