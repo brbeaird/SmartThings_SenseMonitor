@@ -5,8 +5,8 @@ const serverVersion = "1.0.1";
 //Libraries
 const http = require('http');
 const sense = require('sense-energy-node');
-const request = require("request-promise");
 const express = require('express');
+const axios = require('axios').default;
 const os = require('os');
 const app = express();
 const appServer = http.createServer(app);
@@ -17,7 +17,7 @@ const config = require('./config');
 const email = config.email;
 const password = config.password;
 var smartThingsHubIP = config.smartThingsHubIP;
-const smartThingsAppId = config.smartThingsAppId || undefined;
+const smartThingsAppId = config.smartThingsAppId || 'STSense';
 const callbackPort = config.callbackPort || 9021;
 
 //Optional Settings (Set in Config.js)
@@ -53,10 +53,10 @@ var deviceIdList = [];              //Holds list of Sense devices (just the IDs)
 var serviceStartTime = Date.now();  //Returns time in millis
 var eventCount = 0;                 //Keeps a tally of how many times data was sent to ST in the running sessions
 var postOptions = {                 //Basic template for POSTing to SmartThings
-        method: 'POST',
-        uri: 'http://' + smartThingsHubIP + ':39500/event',
-        headers: { 'source': 'STSense' },
-        json: true
+    method: 'post',
+    url: 'http://' + smartThingsHubIP + ':39500/event',
+    headers: { 'source': smartThingsAppId },
+    timeout: 30000
 }
 
 var lastPush = new Date();
@@ -248,11 +248,16 @@ function refreshDeviceList(){
         }
 
     }).then(async () => {
-        if (deviceIdList.length > 0){
-            updateDailyUsage();
-            let options = postOptions;
-            options.body = {"deviceIds": JSON.stringify(deviceIdList)}
-            request(options);
+        try {
+            if (deviceIdList.length > 0){
+                updateDailyUsage();
+                let options = postOptions;
+                options.data = {"deviceIds": JSON.stringify(deviceIdList)}
+                tsLogger('** Sending refreshed device list to SmartThings **');
+                await axios(options);
+            }
+        } catch (error) {
+            tsLogger(`Error sending device list: ${error.message}`);
         }
     });
 }
@@ -272,28 +277,26 @@ function updateDailyUsage(){
 }
 
 //Checks Sense Timeline for short-lived on/off events that may have been missed; send any missed events to ST
-function getMissedEvents(){
+async function getMissedEvents(){
     try {
         let missedToggles = [];
-        mySense.getTimeline().then(timeline => {
-            timeline.items.map(event => {
-                if (event.type == "DeviceWasOn" && Date.parse(event.start_time) > deviceList[event.device_id].lastOn){
-                    tsLogger(`Missed toggle event detected for ${event.device_name} (${event.device_id})`);
-                    missedToggles.push(event.device_id);
-                    deviceList[event.device_id].lastOn = new Date().getTime();
-                }
-            })
-
-            //Post missed events to SmartThings so we can toggle those on and off
-            if (missedToggles.length > 0){
-                let options = postOptions;
-                postOptions.body = {"toggleIds": missedToggles}
-                request(options)
+        let timeline = await mySense.getTimeline()
+        timeline.items.map(event => {
+            if (event.type == "DeviceWasOn" && Date.parse(event.start_time) > deviceList[event.device_id].lastOn){
+                tsLogger(`Missed toggle event detected for ${event.device_name} (${event.device_id})`);
+                missedToggles.push(event.device_id);
+                deviceList[event.device_id].lastOn = new Date().getTime();
             }
         })
 
+        //Post missed events to SmartThings so we can toggle those on and off
+        if (missedToggles.length > 0){
+            let options = postOptions;
+            postOptions.data = {"toggleIds": missedToggles}
+            await axios(options)
+        }
     } catch (error) {
-        tsLogger(error.stack);
+        tsLogger(`Error getting missed events: ${error.message}`);
     }
 }
 
@@ -340,7 +343,7 @@ function updateMonitorInfo(otherData = {}) {
 }
 
 //Main websocket data processing
-function processData(data) {
+async function processData(data) {
     try {
         if (data.payload && data.payload.devices) {
 
@@ -457,7 +460,7 @@ function processData(data) {
             }
 
             let options = postOptions;
-            options.body =
+            options.data =
             {
                 'devices': deviceGroups[0],
                 'timestamp': Date.now(),
@@ -477,36 +480,41 @@ function processData(data) {
                 'frameId': data.payload.frame
             }
 
-            if (smartThingsAppId !== undefined || smartThingsAppId !== '') {
-                options.headers.senseAppId = config.smartThingsAppId;
-            }
-
             //****Send to SmartThings!****
-            //Send first group that also contains config info
-            request(options)
-            .then(function() {
+            try {
+                tsLogger('** Sending (' + devArray.length + ') Devices to SmartThings! **');
+                await axios(options);
+
                 eventCount++;
-                tsLogger('** Sent (' + devArray.length + ') Devices to SmartThings! | Usage: (' + convUsage(data.payload.w) + 'W) **');
 
                 //Push other groups (if applicable)
                 deviceGroups.splice(0,1);
-                deviceGroups.forEach(devGroup => {
-                    options.body = {"devices": devGroup}
-                    request(options)
-                })
+                let i = 2;
+                for (let devGroup of deviceGroups)
+                {
+                    try {
+                        options.data = {"devices": devGroup}
+                        tsLogger(`** Sending group ${i} to SmartThings! **`);
+                        await axios(options);
+                    } catch (error) {
+                        tsLogger(`ERROR: Problem pushing data group ${i} to SmartThings Hub: ${error.message}`);
+                    }
+                    i++;
+                }
+                tsLogger('** Sent devices to SmartThings! | Usage: (' + convUsage(data.payload.w) + 'W) **');
 
-                currentlyProcessing = false;
-            })
-            .catch(function(err) {
-                console.log("ERROR: Unable to connect to SmartThings Hub: " + err.message);
-                currentlyProcessing = false;
-            });
+            } catch (error) {
+                tsLogger("ERROR: Problem pushing data to SmartThings Hub: " + error.message);
+            }
         }
+        else{
+            tsLogger("Payload empty!");
+        }
+        currentlyProcessing = false;
     } catch (error) {
         tsLogger(error + ' ' + error.stack);
         currentlyProcessing = false;
     }
-
 }
 
 //Attempt to refresh auth

@@ -10,13 +10,12 @@
     "author": "",
     "license": "ISC",
     "dependencies": {
-        "express": "^4.17.1",
-        "moment": "^2.29.1",
+        "axios": "^0.27.2",
+        "express": "^4.18.1",
+        "moment": "^2.29.3",
         "node-datetime": "^2.1.2",
-        "node-fetch": "^2.6.1",
-        "request": "^2.88.2",
-        "request-promise": "^4.2.6",
+        "node-fetch": "^3.2.5",
         "sense-energy-node": "^1.0.6",
-        "ws": "^6.2.1"
+        "ws": "^8.7.0"
     }
 }
