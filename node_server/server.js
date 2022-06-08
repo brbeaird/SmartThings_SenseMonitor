@@ -7,6 +7,7 @@ const http = require('http');
 const sense = require('sense-energy-node');
 const request = require("request-promise");
 const express = require('express');
+const axios = require('axios').default;
 const os = require('os');
 const app = express();
 const appServer = http.createServer(app);
@@ -57,6 +58,12 @@ var postOptions = {                 //Basic template for POSTing to SmartThings
         uri: 'http://' + smartThingsHubIP + ':39500/event',
         headers: { 'source': 'STSense' },
         json: true
+}
+var axiosOptions = {                 //Basic template for POSTing to SmartThings
+    method: 'post',
+    url: 'http://' + smartThingsHubIP + ':39500/event',
+    headers: { 'source': 'STSense' }    ,
+    timeout: 30000
 }
 
 var lastPush = new Date();
@@ -340,7 +347,7 @@ function updateMonitorInfo(otherData = {}) {
 }
 
 //Main websocket data processing
-function processData(data) {
+async function processData(data) {
     try {
         if (data.payload && data.payload.devices) {
 
@@ -482,31 +489,42 @@ function processData(data) {
             }
 
             //****Send to SmartThings!****
-            //Send first group that also contains config info
-            request(options)
-            .then(function() {
+            let axiosConfig = axiosOptions;
+            axiosConfig.body = options.body;
+            try {
+                tsLogger('** Sending (' + devArray.length + ') Devices to SmartThings! **');
+                await axios(axiosConfig);
+
                 eventCount++;
-                tsLogger('** Sent (' + devArray.length + ') Devices to SmartThings! | Usage: (' + convUsage(data.payload.w) + 'W) **');
 
                 //Push other groups (if applicable)
                 deviceGroups.splice(0,1);
-                deviceGroups.forEach(devGroup => {
-                    options.body = {"devices": devGroup}
-                    request(options)
-                })
+                let i = 2;
+                for (let devGroup of deviceGroups)
+                {
+                    try {
+                        axiosConfig.body = {"devices": devGroup}
+                        tsLogger(`** Sending group ${i} to SmartThings! **`);
+                        await axios(axiosConfig);
+                    } catch (error) {
+                        tsLogger(`ERROR: Problem pushing data group ${i} to SmartThings Hub: ${error.message}`);
+                    }
+                    i++;
+                }
+                tsLogger('** Sent devices to SmartThings! | Usage: (' + convUsage(data.payload.w) + 'W) **');
 
-                currentlyProcessing = false;
-            })
-            .catch(function(err) {
-                console.log("ERROR: Unable to connect to SmartThings Hub: " + err.message);
-                currentlyProcessing = false;
-            });
+            } catch (error) {
+                tsLogger("ERROR: Problem pushing data to SmartThings Hub: " + error.message);
+            }
         }
+        else{
+            tsLogger("Payload empty!");
+        }
+        currentlyProcessing = false;
     } catch (error) {
         tsLogger(error + ' ' + error.stack);
         currentlyProcessing = false;
     }
-
 }
 
 //Attempt to refresh auth
