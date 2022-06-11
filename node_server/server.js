@@ -219,7 +219,7 @@ async function periodicRefresh(){
 
         getMissedEvents();
     } catch (error) {
-        tsLogger.error(`Error in periodicRefresh: ${error.message}`)
+        tsLogger(`Error in periodicRefresh: ${error.message}`)
     }
 }
 
