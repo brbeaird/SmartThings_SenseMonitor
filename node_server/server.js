@@ -16,7 +16,7 @@ const moment = require('moment');
 const config = require('./config');
 const email = process.env.email || config.email;
 const password = process.env.password || config.password;
-var smartThingsHubIP = process.env.smartThingsHubIP || config.smartThingsHubIP;
+const smartThingsHubIP = process.env.smartThingsHubIP || config.smartThingsHubIP;
 const smartThingsAppId = process.env.smartThingsAppId || config.smartThingsAppId || 'STSense';
 const callbackPort = process.env.callbackPort || config.callbackPort || 0;
 
@@ -494,7 +494,7 @@ async function processData(data) {
                 {
                     try {
                         options.data = {"devices": devGroup}
-                        tsLogger(`** Sending group ${i} to SmartThings! **`);
+                        tsLogger(`** Sending group ${i} to SmartThings hub @ ${postOptions.url} **`);
                         await axios(options);
                     } catch (error) {
                         tsLogger(`ERROR: Problem pushing data group ${i} to SmartThings Hub: ${error.message}`);
