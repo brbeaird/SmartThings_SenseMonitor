@@ -14,11 +14,11 @@ const moment = require('moment');
 
 //Required Setting (Set in Config.js)
 const config = require('./config');
-const email = config.email;
-const password = config.password;
-var smartThingsHubIP = config.smartThingsHubIP;
-const smartThingsAppId = config.smartThingsAppId || 'STSense';
-const callbackPort = config.callbackPort || 9021;
+const email = process.env.email || config.email;
+const password = process.env.password || config.password;
+var smartThingsHubIP = process.env.smartThingsHubIP || config.smartThingsHubIP;
+const smartThingsAppId = process.env.smartThingsAppId || config.smartThingsAppId || 'STSense';
+const callbackPort = process.env.callbackPort || config.callbackPort || 0;
 
 //Optional Settings (Set in Config.js)
 /**************************************************************************************************************************************
