@@ -225,41 +225,46 @@ async function periodicRefresh(){
 
 //Refresh device list from Sense and send a list of the ID's to ST to check for stale devices
 function refreshDeviceList(){
-    deviceIdList = [];
-    mySense.getDevices().then(devices => {
-        for (let dev of devices) {
-            dev.lastSeen = new Date().getTime();
-            if (!deviceList[dev.id]) {
-                addDevice(dev);
+    try {
+        deviceIdList = [];
+        mySense.getDevices().then(devices => {
+            for (let dev of devices) {
+                dev.lastSeen = new Date().getTime();
+                if (!deviceList[dev.id]) {
+                    addDevice(dev);
+                }
+                else{
+                    deviceIdList.push(dev.id);
+                    deviceList[dev.id]= dev;
+                }
             }
-            else{
-                deviceIdList.push(dev.id);
-                deviceList[dev.id]= dev;
-            }
-        }
 
-        //Now remove stale devices from our local list
-        for (let i = 0; i < Object.keys(deviceList).length; i++){
-            let devKey = deviceList[Object.keys(deviceList)[i]]
-            if (new Date().getTime() - devKey.lastSeen > 1000*60*(refreshInterval*2)){
-                delete deviceList[devKey.id];
-                tsLogger(`${devKey.name} detected as deleted. Removing.`);
+            //Now remove stale devices from our local list
+            for (let i = 0; i < Object.keys(deviceList).length; i++){
+                let devKey = deviceList[Object.keys(deviceList)[i]]
+                if (new Date().getTime() - devKey.lastSeen > 1000*60*(refreshInterval*2)){
+                    delete deviceList[devKey.id];
+                    tsLogger(`${devKey.name} detected as deleted. Removing.`);
+                }
             }
-        }
 
-    }).then(async () => {
-        try {
-            if (deviceIdList.length > 0){
-                updateDailyUsage();
-                let options = postOptions;
-                options.data = {"deviceIds": JSON.stringify(deviceIdList)}
-                tsLogger('** Sending refreshed device list to SmartThings **');
-                await axios(options);
+        }).then(async () => {
+            try {
+                if (deviceIdList.length > 0){
+                    updateDailyUsage();
+                    let options = postOptions;
+                    options.data = {"deviceIds": JSON.stringify(deviceIdList)}
+                    tsLogger('** Sending refreshed device list to SmartThings **');
+                    await axios(options);
+                }
+            } catch (error) {
+                tsLogger(`Error sending device list: ${error.message}`);
             }
-        } catch (error) {
-            tsLogger(`Error sending device list: ${error.message}`);
-        }
-    });
+        });
+    } catch (error) {
+        tsLogger(`Error in refreshDeviceList: ${error.message}`)
+    }
+
 }
 
 //Get daily usage and production
