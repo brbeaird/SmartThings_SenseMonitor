@@ -135,7 +135,6 @@ async function startSense(){
         if (error.stack){
             tsLogger(`FATAL ERROR: ${error.stack}`);
         }
-        process.exit();
     }
 }
 
@@ -528,7 +527,6 @@ function refreshAuth(){
         mySense.getAuth();
     } catch (error) {
         tsLogger(`Re-auth failed: ${error}. Exiting.`);
-        process.exit();
     }
 }
 
@@ -647,10 +645,10 @@ function startWebServer() {
     });
     process.stdin.resume(); //so the program will not close instantly
 
-    //do something when app is closing
-     process.on('exit', exitHandler.bind(null, {
-         exit: true
-     }));
+    // //do something when app is closing
+    //  process.on('exit', exitHandler.bind(null, {
+    //      exit: true
+    //  }));
 
     //catches ctrl+c event
     process.on('SIGINT', gracefulStop);
